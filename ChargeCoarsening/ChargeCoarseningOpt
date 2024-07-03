@@ -1,0 +1,250 @@
+using DifferentialEquations, Random, Statistics
+using Plots
+using LinearAlgebra
+using Interpolations
+using ProgressLogging
+using ForwardDiff
+using BenchmarkTools
+using QuadGK
+using FFTW
+gr()
+
+function initialize_grid(nx::Int, ny::Int, L::Float64)::Tuple{Float64, Float64, Vector{Float64}, Vector{Float64}}
+    dx = L / nx
+    dy = L / ny
+    x_centers = range(dx/2, stop=L-dx/2, length=nx) |> collect
+    y_centers = range(dy/2, stop=L-dy/2, length=ny) |> collect
+    return dx, dy, x_centers, y_centers
+end
+
+function fill_mat(nx::Int, ny::Int, phi::Matrix{Float64}) 
+    # Initialize phi_mat with the correct size and type
+    phi_mat = Matrix{Float64}(undef, nx+2, ny+2)
+
+    # Fill the interior of phi_mat with phi
+    phi_mat[2:nx+1, 2:ny+1] = phi
+
+    # Fill boundary conditions
+    # Top and bottom boundaries
+    phi_mat[1, 2:ny+1] = phi[end, :]
+    phi_mat[end, 2:ny+1] = phi[1, :]
+
+    # Left and right boundaries
+    phi_mat[2:nx+1, 1] = phi[:, end]
+    phi_mat[2:nx+1, end] = phi[:, 1]
+
+    # Corner averaging
+    phi_mat[1, 1] = (phi_mat[1, 2] + phi_mat[2, 1]) / 2
+    phi_mat[end, end] = (phi_mat[end, end-1] + phi_mat[end-1, end]) / 2
+    phi_mat[1, end] = (phi_mat[2, end] + phi_mat[1, end-1]) / 2
+    phi_mat[end, 1] = (phi_mat[end, 2] + phi_mat[end-1, 1]) / 2
+
+    return phi_mat
+end
+
+function initialize_solution(x_centers, y_centers, p)
+    L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal = p
+    
+    # Determine lengths of x_centers and y_centers
+    nx = length(x_centers)
+    ny = length(y_centers)
+    
+    # Generate random perturbations with specified scaling
+    perturb = 0.01 * randn(nx, ny)
+    
+    # Compute initial values
+    phi0_vals = reshape(phi0 .* (1 .+ perturb), :)  # Reshape to flatten into 1D array
+    phicat0_vals = reshape(phicat0 .* (1 .+ perturb), :)
+    phian0_vals = reshape(phian0 .* (1 .+ perturb), :)
+    
+    # Adjust phian0_vals
+    mean_diff = sum(sigma .* phi0_vals .+ phicat0_vals .- phian0_vals) / (nx * ny)
+    phian0_vals .+= mean_diff
+    
+    # Initialize u0_vals and psi0_vals
+    u0_vals = zeros(nx * ny)
+    psi0_vals = phi0_vals .- phi0
+    
+    # Concatenate into z0 vector
+    z0 = vcat(phi0_vals, phicat0_vals, phian0_vals, u0_vals, psi0_vals)
+    
+    return z0
+end
+
+function dae(dz::Vector{Float64}, z::Vector{Float64}, p::Tuple, t::Float64)    # println(t)
+    L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal= p
+    nx=convert(Int,nx)
+    ny=convert(Int, ny)
+    
+    # Reshape z into matrices
+    @views phi = reshape(z[1:nx*ny], nx, ny)
+    @views phicat = reshape(z[nx*ny+1:2*nx*ny], nx, ny)
+    @views phian = reshape(z[2*nx*ny+1:3*nx*ny], nx, ny)
+    @views u = reshape(z[3*nx*ny+1:4*nx*ny], nx, ny)
+    @views psi = reshape(z[4*nx*ny+1:5*nx*ny], nx, ny)
+
+    # Preallocate matrices
+    @views phi_mat = fill_mat(nx, ny, phi)
+    @views phicat_mat = fill_mat(nx, ny, phicat)
+    @views phian_mat = fill_mat(nx, ny, phian)
+    @views u_mat = fill_mat(nx, ny, u)
+    @views psi_mat = fill_mat(nx, ny, psi)
+
+    # Reshape dz into 3D array
+    @views dz = reshape(dz, nx, ny, 5)
+
+    @views mu_mat=similar(phi_mat)
+
+    @views mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi
+    @views mu_mat=fill_mat(nx,ny, mu)
+
+
+    @views phi_flux_x=-(phi_mat[2:end,2:end-1].+phi_mat[1:end-1,2:end-1])/2 .*(mu_mat[2:end,2:end-1] .-mu_mat[1:end-1,2:end-1])/dx
+    @views phi_flux_y=-(phi_mat[2:end-1,2:end].+phi_mat[2:end-1,1:end-1])/2 .*(mu_mat[2:end-1,2:end] .-mu_mat[2:end-1,1:end-1])/dy
+
+
+    @views phicat_flux_x=-D*(phicat_mat[2:end,2:end-1] .-phicat_mat[1:end-1,2:end-1])/dx-D*(phicat_mat[2:end,2:end-1].+phicat_mat[1:end-1,2:end-1])/2 .*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
+    @views phicat_flux_y=-D*(phicat_mat[2:end-1,2:end] .-phicat_mat[2:end-1,1:end-1])/dy-D*(phicat_mat[2:end-1,2:end].+phicat_mat[2:end-1,1:end-1])/2 .*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
+
+
+    @views phian_flux_x=-D*(phian_mat[2:end,2:end-1] .-phian_mat[1:end-1,2:end-1])/dx+D*(phian_mat[2:end,2:end-1].+phian_mat[1:end-1,2:end-1])/2 .*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
+    @views phian_flux_y=-D*(phian_mat[2:end-1,2:end] .-phian_mat[2:end-1,1:end-1])/dy+D*(phian_mat[2:end-1,2:end].+phian_mat[2:end-1,1:end-1])/2 .*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
+
+    @views u_flux_x=-lambda^2*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
+    @views u_flux_y=-lambda^2*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
+
+
+    @views psi_flux_x=-(phi_mat[2:end,2:end-1] .-phi_mat[1:end-1,2:end-1])/dx
+    @views psi_flux_y=-(phi_mat[2:end-1,2:end] .-phi_mat[2:end-1,1:end-1])/dy
+    
+    @views dz[:,:,1]=-(phi_flux_x[2:end,:]-phi_flux_x[1:end-1,:])/dx - (phi_flux_y[:,2:end]-phi_flux_y[:,1:end-1])/dy
+    @views dz[:,:,2]=-(phicat_flux_x[2:end,:]-phicat_flux_x[1:end-1,:])/dx - (phicat_flux_y[:,2:end]-phicat_flux_y[:,1:end-1])/dy
+    @views dz[:,:,3]=-(phian_flux_x[2:end,:]-phian_flux_x[1:end-1,:])/dx - (phian_flux_y[:,2:end]-phian_flux_y[:,1:end-1])/dy
+    @views dz[:,:,4]=-(u_flux_x[2:end,:]-u_flux_x[1:end-1,:])/dx - (u_flux_y[:,2:end]-u_flux_y[:,1:end-1])/dy.+sign.(phicat.-phian.+sigma*phi).*max.(abs.(phicat.-phian.+sigma*phi),1e-8 .*ones((nx,ny)))
+    @views dz[:,:,5]=-(psi_flux_x[2:end,:]-psi_flux_x[1:end-1,:])/dx - (psi_flux_y[:,2:end]-psi_flux_y[:,1:end-1])/dy.+psi
+    dz =reshape(dz, (5*nx*ny,1))
+
+end
+
+function run_simulation(p)
+    @time begin
+        L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
+        nx=convert(Int,nx)
+        ny=convert(Int, ny)
+        dx, dy, x_centers, y_centers = initialize_grid(nx, ny,L)
+        z0 = initialize_solution(x_centers, y_centers,L, p)
+        
+        tspan = (0.0, tfinal)
+
+        # Solve the DAE using ode15s
+        M=I(5*nx*ny)
+        M[3*nx*ny+1:end,3*nx*ny+1:end]=zeros((2*nx*ny, 2*nx*ny))
+        f = ODEFunction(dae,mass_matrix=M)
+        prob = ODEProblem(f, z0, tspan,p)
+        sol = solve(prob,Rosenbrock23(),reltol=1e-6,abstol=1e-6, progress = true)
+    end
+    return x_centers, y_centers, sol
+end
+
+function plot_solution(x_centers, y_centers, z, title_str,p)
+    L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
+    nx=convert(Int,nx)
+    ny=convert(Int, ny)
+    # surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, zlims=(0, 1), clim=(0, 1))
+    surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, clim=(0, 1), zlims=(0,1))
+end
+
+function compute_structure_factor(field::Matrix{Float64})
+    # Perform 2D Fourier Transform of the field
+    F = fftshift(fft(field))
+
+    # Compute the magnitude squared (power spectrum)
+    S = abs2.(F)
+
+    return S
+end
+
+# Function to compute radial average
+function radial_average(S::Matrix{Float64})
+    nx, ny = size(S)
+    center_x, center_y = div(nx, 2), div(ny, 2)
+    radial_bins = collect(0:0.1:maximum(hypot.(1:nx .- center_x, 1:ny .- center_y)))
+    radial_profile = zeros(length(radial_bins))
+
+    bin_counts = zeros(length(radial_bins))
+
+    for i in 1:nx
+        for j in 1:ny
+            r = hypot(i - center_x, j - center_y)
+            bin = searchsortedfirst(radial_bins, r)
+            if bin > 0 && bin <= length(radial_bins)
+                radial_profile[bin] += S[i, j]
+                bin_counts[bin] += 1
+            end
+        end
+    end
+
+    # Avoid division by zero by using only non-zero bin counts
+    radial_profile = radial_profile ./ max.(bin_counts, 1)
+
+    return radial_bins, radial_profile
+end
+
+function trapezoidal_integration(x::Vector{Float64}, y::Vector{Float64})
+    n = length(x)
+    integral = 0.0
+    for i in 1:n-1
+        integral += 0.5 * (x[i+1] - x[i]) * (y[i+1] + y[i])
+    end
+    return integral
+end
+
+function find_R(phi)
+    S = compute_structure_factor(phi)
+    radial_bins, radial_profile = radial_average(S)
+    integral1 = trapezoidal_integration(radial_bins, radial_profile)
+    integral2=trapezoidal_integration(radial_bins, radial_bins.*radial_profile)
+    R=integral2/integral1
+    return R
+end
+
+# Example usage
+nx::Int = 20  # Number of spatial grid points in x-direction
+ny::Int = 20 # Number of spatial grid points in y-direction
+L=20
+
+
+N=10
+
+dx = L/ nx
+dy = L / ny
+
+D=sqrt(N)
+lambda=0.6
+sigma=0.0
+chi=(1+1/sqrt(N))^2/1.2
+phi0=1/(1+sqrt(N))
+phicat0=0.002
+phian0=0.002+sigma*phi0
+tfinal=300.0
+dt=10.0
+
+p=[L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal]
+
+x_centers, y_centers, sol = run_simulation(p)
+t_values = sol.t  # Time values of simulation
+
+# Time points where you want to interpolate
+interpolation_times = 0:dt:tfinal
+Rt=similar(interpolation_times)
+anim = @animate for j=1:length(interpolation_times)
+    interpolated_solution=sol(interpolation_times[j])
+    z_vals=reshape(interpolated_solution[1:nx*ny],(nx,ny))
+    plot_solution(x_centers, y_centers, z_vals,string(interpolation_times[j]),p)
+    R=find_R(z_vals)
+    Rt[j]=R
+end 
+gif(anim, "./animation.gif", fps=4)
+
+# Create the plot
+plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", legend=false)
