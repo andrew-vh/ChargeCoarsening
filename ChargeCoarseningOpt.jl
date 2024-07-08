@@ -45,71 +45,58 @@ function initialize_solution(x_centers, y_centers,L, p)
     return z0
 end
 
-function dae(dz, z, p,t)
-    # println(t)
+function dae(dz::Vector{Float64}, z::Vector{Float64}, p::Tuple, t::Float64)    # println(t)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal= p
     nx=convert(Int,nx)
     ny=convert(Int, ny)
     
-    phi=reshape(z[1:nx*ny], (nx,ny))
-    phicat=reshape(z[nx*ny+1:2*nx*ny], (nx,ny))
-    phian=reshape(z[2*nx*ny+1:3*nx*ny], (nx,ny))
-    u=reshape(z[3*nx*ny+1:4*nx*ny], (nx,ny))
-    psi=reshape(z[4*nx*ny+1:5*nx*ny], (nx,ny))
+    # Reshape z into matrices
+    @views phi = reshape(z[1:nx*ny], nx, ny)
+    @views phicat = reshape(z[nx*ny+1:2*nx*ny], nx, ny)
+    @views phian = reshape(z[2*nx*ny+1:3*nx*ny], nx, ny)
+    @views u = reshape(z[3*nx*ny+1:4*nx*ny], nx, ny)
+    @views psi = reshape(z[4*nx*ny+1:5*nx*ny], nx, ny)
 
-    phi_mat=fill_mat(nx,ny, phi)
-    phicat_mat=fill_mat(nx,ny, phicat)
-    phian_mat=fill_mat(nx,ny, phian)
-    u_mat=fill_mat(nx,ny, u)
-    psi_mat=fill_mat(nx,ny, psi)
+    # Preallocate matrices
+    @views phi_mat = fill_mat(nx, ny, phi)
+    @views phicat_mat = fill_mat(nx, ny, phicat)
+    @views phian_mat = fill_mat(nx, ny, phian)
+    @views u_mat = fill_mat(nx, ny, u)
+    @views psi_mat = fill_mat(nx, ny, psi)
 
-    dz=reshape(dz, (nx,ny, 5))
+    # Reshape dz into 3D array
+    @views dz = reshape(dz, nx, ny, 5)
 
-    mu=similar(phi)
+    @views mu_mat=similar(phi_mat)
 
-    mu_mat=similar(phi_mat)
+    @views mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi
+    @views mu_mat=fill_mat(nx,ny, mu)
 
-    mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi
 
-    mu_mat=log.(abs.(phi_mat).^(1/N)./abs.(1 .-phi_mat) .+1e-6).-2*chi*phi_mat.+ psi_mat
+    @views phi_flux_x=-(phi_mat[2:end,2:end-1].+phi_mat[1:end-1,2:end-1])/2 .*(mu_mat[2:end,2:end-1] .-mu_mat[1:end-1,2:end-1])/dx
+    @views phi_flux_y=-(phi_mat[2:end-1,2:end].+phi_mat[2:end-1,1:end-1])/2 .*(mu_mat[2:end-1,2:end] .-mu_mat[2:end-1,1:end-1])/dy
 
-    phi_flux_x=zeros((nx+1, ny))
-    phi_flux_y=zeros((nx, ny+1))
 
-    phi_flux_x=-(phi_mat[2:end,2:end-1].+phi_mat[1:end-1,2:end-1])/2 .*(mu_mat[2:end,2:end-1] .-mu_mat[1:end-1,2:end-1])/dx
-    phi_flux_y=-(phi_mat[2:end-1,2:end].+phi_mat[2:end-1,1:end-1])/2 .*(mu_mat[2:end-1,2:end] .-mu_mat[2:end-1,1:end-1])/dy
-    dz[:,:,1]=-(phi_flux_x[2:end,:]-phi_flux_x[1:end-1,:])/dx - (phi_flux_y[:,2:end]-phi_flux_y[:,1:end-1])/dy
+    @views phicat_flux_x=-D*(phicat_mat[2:end,2:end-1] .-phicat_mat[1:end-1,2:end-1])/dx-D*(phicat_mat[2:end,2:end-1].+phicat_mat[1:end-1,2:end-1])/2 .*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
+    @views phicat_flux_y=-D*(phicat_mat[2:end-1,2:end] .-phicat_mat[2:end-1,1:end-1])/dy-D*(phicat_mat[2:end-1,2:end].+phicat_mat[2:end-1,1:end-1])/2 .*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
 
-    phicat_flux_x=zeros((nx+1, ny))
-    phicat_flux_y=zeros((nx, ny+1))
 
-    phicat_flux_x=-D*(phicat_mat[2:end,2:end-1] .-phicat_mat[1:end-1,2:end-1])/dx-D*(phicat_mat[2:end,2:end-1].+phicat_mat[1:end-1,2:end-1])/2 .*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
-    phicat_flux_y=-D*(phicat_mat[2:end-1,2:end] .-phicat_mat[2:end-1,1:end-1])/dy-D*(phicat_mat[2:end-1,2:end].+phicat_mat[2:end-1,1:end-1])/2 .*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
-    dz[:,:,2]=-(phicat_flux_x[2:end,:]-phicat_flux_x[1:end-1,:])/dx - (phicat_flux_y[:,2:end]-phicat_flux_y[:,1:end-1])/dy
+    @views phian_flux_x=-D*(phian_mat[2:end,2:end-1] .-phian_mat[1:end-1,2:end-1])/dx+D*(phian_mat[2:end,2:end-1].+phian_mat[1:end-1,2:end-1])/2 .*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
+    @views phian_flux_y=-D*(phian_mat[2:end-1,2:end] .-phian_mat[2:end-1,1:end-1])/dy+D*(phian_mat[2:end-1,2:end].+phian_mat[2:end-1,1:end-1])/2 .*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
 
-    phian_flux_x=zeros((nx+1, ny))
-    phian_flux_y=zeros((nx, ny+1))
+    @views u_flux_x=-lambda^2*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
+    @views u_flux_y=-lambda^2*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
 
-    phian_flux_x=-D*(phian_mat[2:end,2:end-1] .-phian_mat[1:end-1,2:end-1])/dx+D*(phian_mat[2:end,2:end-1].+phian_mat[1:end-1,2:end-1])/2 .*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
-    phian_flux_y=-D*(phian_mat[2:end-1,2:end] .-phian_mat[2:end-1,1:end-1])/dy+D*(phian_mat[2:end-1,2:end].+phian_mat[2:end-1,1:end-1])/2 .*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
-    dz[:,:,3]=-(phian_flux_x[2:end,:]-phian_flux_x[1:end-1,:])/dx - (phian_flux_y[:,2:end]-phian_flux_y[:,1:end-1])/dy
 
-    u_flux_x=zeros((nx+1, ny))
-    u_flux_y=zeros((nx, ny+1))
-
-    u_flux_x=-lambda^2*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
-    u_flux_y=-lambda^2*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
-    dz[:,:,4]=-(u_flux_x[2:end,:]-u_flux_x[1:end-1,:])/dx - (u_flux_y[:,2:end]-u_flux_y[:,1:end-1])/dy.+sign.(phicat.-phian.+sigma*phi).*max.(abs.(phicat.-phian.+sigma*phi),1e-8 .*ones((nx,ny)))
-
-    psi_flux_x=zeros((nx+1, ny))
-    psi_flux_y=zeros((nx, ny+1))
-
-    psi_flux_x=-(phi_mat[2:end,2:end-1] .-phi_mat[1:end-1,2:end-1])/dx
-    psi_flux_y=-(phi_mat[2:end-1,2:end] .-phi_mat[2:end-1,1:end-1])/dy
-    dz[:,:,5]=-(psi_flux_x[2:end,:]-psi_flux_x[1:end-1,:])/dx - (psi_flux_y[:,2:end]-psi_flux_y[:,1:end-1])/dy.+psi
-
+    @views psi_flux_x=-(phi_mat[2:end,2:end-1] .-phi_mat[1:end-1,2:end-1])/dx
+    @views psi_flux_y=-(phi_mat[2:end-1,2:end] .-phi_mat[2:end-1,1:end-1])/dy
+    
+    @views dz[:,:,1]=-(phi_flux_x[2:end,:]-phi_flux_x[1:end-1,:])/dx - (phi_flux_y[:,2:end]-phi_flux_y[:,1:end-1])/dy
+    @views dz[:,:,2]=-(phicat_flux_x[2:end,:]-phicat_flux_x[1:end-1,:])/dx - (phicat_flux_y[:,2:end]-phicat_flux_y[:,1:end-1])/dy
+    @views dz[:,:,3]=-(phian_flux_x[2:end,:]-phian_flux_x[1:end-1,:])/dx - (phian_flux_y[:,2:end]-phian_flux_y[:,1:end-1])/dy
+    @views dz[:,:,4]=-(u_flux_x[2:end,:]-u_flux_x[1:end-1,:])/dx - (u_flux_y[:,2:end]-u_flux_y[:,1:end-1])/dy.+sign.(phicat.-phian.+sigma*phi).*max.(abs.(phicat.-phian.+sigma*phi),1e-8 .*ones((nx,ny)))
+    @views dz[:,:,5]=-(psi_flux_x[2:end,:]-psi_flux_x[1:end-1,:])/dx - (psi_flux_y[:,2:end]-psi_flux_y[:,1:end-1])/dy.+psi
     dz =reshape(dz, (5*nx*ny,1))
-    println(t)
 
 end
 
@@ -140,9 +127,9 @@ function plot_solution(x_centers, y_centers, z, title_str,p)
 end
 
 # Example usage
-nx::Int = 50  # Number of spatial grid points in x-direction
-ny::Int = 50 # Number of spatial grid points in y-direction
-L=50
+nx::Int = 10  # Number of spatial grid points in x-direction
+ny::Int = 10 # Number of spatial grid points in y-direction
+L=10
 N=10
 
 dx = L/ nx

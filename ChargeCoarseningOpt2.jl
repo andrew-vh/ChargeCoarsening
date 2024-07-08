@@ -1,7 +1,3 @@
-using Pkg
-Pkg.activate("/home/jsouza/.julia/project1")
-Pkg.instantiate()
-
 using DifferentialEquations, Random, Statistics
 using Plots
 using LinearAlgebra
@@ -9,14 +5,10 @@ using Interpolations
 using ProgressLogging
 using ForwardDiff
 using BenchmarkTools
+using QuadGK
+using FFTW
 using SparseDiffTools
-using DiffEqDiffTools
-
-ENV["GKSwstype"]="nul"
- 
 gr()
-default(display_type=:inline)
-
 
 function initialize_grid(nx, ny, L)
     dx = L / nx
@@ -113,11 +105,12 @@ end
 
 # end
 
-function dae(dz, z, p,t)
+function dae(dz, z, p, t)
     # println(t)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal= p
     nx=convert(Int,nx)
     ny=convert(Int, ny)
+    
     
     phi=reshape(z[1:nx*ny], (nx,ny))
     phicat=reshape(z[nx*ny+1:2*nx*ny], (nx,ny))
@@ -147,7 +140,7 @@ function dae(dz, z, p,t)
  
    
 
-    mu=-2*chi*phi .+psi .+sigma*u
+    # mu=-2*chi*phi .+psi .+sigma*u
 
     # mu=log.(abs.(phi).^(1/N) .+1e-6) .-log.(abs.(1 .-phi).+1e-6) .-2*chi*phi.+ psi
 
@@ -231,6 +224,9 @@ function dae(dz, z, p,t)
     #     end
     # end
     
+    
+
+
 end
 
 function run_simulation(p)
@@ -271,12 +267,64 @@ function plot_solution(x_centers, y_centers, z, title_str,p)
     surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, clim=(0, 1), zlims=(0,1))
 end
 
+function compute_structure_factor(field::Matrix{Float64})
+    # Perform 2D Fourier Transform of the field
+    F = fftshift(fft(field))
 
+    # Compute the magnitude squared (power spectrum)
+    S = abs2.(F)
+
+    return S
+end
+
+# Function to compute radial average
+function radial_average(S::Matrix{Float64})
+    nx, ny = size(S)
+    center_x, center_y = div(nx, 2), div(ny, 2)
+    radial_bins = collect(0:0.1:maximum(hypot.(1:nx .- center_x, 1:ny .- center_y)))
+    radial_profile = zeros(length(radial_bins))
+
+    bin_counts = zeros(length(radial_bins))
+
+    for i in 1:nx
+        for j in 1:ny
+            r = hypot(i - center_x, j - center_y)
+            bin = searchsortedfirst(radial_bins, r)
+            if bin > 0 && bin <= length(radial_bins)
+                radial_profile[bin] += S[i, j]
+                bin_counts[bin] += 1
+            end
+        end
+    end
+
+    # Avoid division by zero by using only non-zero bin counts
+    radial_profile = radial_profile ./ max.(bin_counts, 1)
+
+    return radial_bins, radial_profile
+end
+
+function trapezoidal_integration(x::Vector{Float64}, y::Vector{Float64})
+    n = length(x)
+    integral = 0.0
+    for i in 1:n-1
+        integral += 0.5 * (x[i+1] - x[i]) * (y[i+1] + y[i])
+    end
+    return integral
+end
+
+function find_R(phi)
+    S = compute_structure_factor(phi)
+    radial_bins, radial_profile = radial_average(S)
+    integral1 = trapezoidal_integration(radial_bins, radial_profile)
+    integral2=trapezoidal_integration(radial_bins, radial_bins.*radial_profile)
+    R=integral2/integral1
+    return R
+end
 
 # Example usage
-nx::Int = 100  # Number of spatial grid points in x-direction
-ny::Int = 100 # Number of spatial grid points in y-direction
-L=50
+nx::Int = 20  # Number of spatial grid points in x-direction
+ny::Int = 20 # Number of spatial grid points in y-direction
+L=20
 
 
 N=10
@@ -291,7 +339,7 @@ chi=(1+1/sqrt(N))^2/1.2
 phi0=1/(1+sqrt(N))
 phicat0=0.002
 phian0=0.002+sigma*phi0
-tfinal=10
+tfinal=1e3
 dt=tfinal/100
 
 p=[L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal]
@@ -306,8 +354,10 @@ anim = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     z_vals=reshape(interpolated_solution[1:nx*ny],(nx,ny))
     plot_solution(x_centers, y_centers, z_vals,string(interpolation_times[j]),p)
+    R=find_R(z_vals)
+    Rt[j]=R
 end 
-gif(anim, "animation5.gif", fps=4)
+gif(anim, "./animation_charged.gif", fps=4)
 
-# # Create the plot
-# plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", legend=false)
+# Create the plot
+plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", legend=false)
