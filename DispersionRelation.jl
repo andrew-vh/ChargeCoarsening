@@ -64,5 +64,6 @@ end
 cmap = cgrad(:oslo, rev=true)
 
 display(surface(σValues, Nlist, wavelength, 
-zlim=(-0.0501,0.7001), camera=(0, 90), c=cmap, xlabel="σ", ylabel="N", title="Instability Phase Diagram"))
+zlim=(-0.0501,0.7001), camera=(0, 90), c=cmap,
+xticks=0:0.1:0.3, yticks=(0:20:100,(0:20:100...,:right)), zticks=false))
 png("phasediagram.png")
