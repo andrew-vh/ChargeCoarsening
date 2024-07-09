@@ -1,6 +1,8 @@
 using Plots
 using Roots
 
+cmap = cgrad(:oslo, rev=true)
+
 function dispersion(k, N, ϕ0, c0, χ, σ, λ, D)
     a = 2*(-λ^2*N+λ^2*N*ϕ0)
     b = -(k^2*λ^2 + 2*c0*D*N + D*k^2*λ^2*N - k^2*λ^2*ϕ0 - 2*c0*D*N*ϕ0 +
@@ -28,42 +30,43 @@ function safesqrt(x)
     end
 end
 
-k = 0:0.01:5
-N = 50
-sList = dispersion.(k, N, 0.1, 0.001, 1, 0.1, 0.6, sqrt(N))
-sFunction(k) = dispersion(k, N, 0.1, 0.001, 1, 0.1, 0.6, sqrt(N))
-gr()
-display(plot(k, sList, ylims=(-0.003, 0.003)))
-
-intervals = find_zeros(sFunction, k)
-println(intervals)
-println(length(intervals))
-
+k = 0:0.01:100
 σstep = 0.001
 Nlist = 1:1:100
 σValues = 0:σstep:0.3
 
-wavelength = Matrix{Float64}(undef, length(Nlist), length(σValues))
+kmat = zeros(Float64, length(Nlist), length(σValues))
 
 for N in Nlist
     for σ in 1:length(σValues)
-        sFunc(k) = dispersion(k, N, 0.1, 0.001, 1, (σ-1)*σstep, 0.6, sqrt(N))
+        sFunc(k) = dispersion(k, N, 0.1, 0.001, 0.8, (σ-1)*σstep, 0.6, sqrt(N))
         intervals = find_zeros(sFunc, k)
         len = length(intervals)
         if len==1
-            wavelength[N, σ] = 0.7
-        elseif len==2
-            wavelength[N, σ] = -0.05
+            kmat[N, σ] = 5
+        elseif len==2 && sFunc(intervals[2]/2) > 0
+            kmat[N, σ] = 0.0005
         else
-            wavelength[N, σ] = intervals[2]
+            kmat[N, σ] = intervals[2]
         end
     end
     println(N)
 end
 
-cmap = cgrad(:oslo, rev=true)
+kmatcopydefault = copy(kmat)
+kmatΦHigh = copy(kmat)
+kmatΦLow = copy(kmat)
+kmatcHigh = copy(kmat)
+kmatcLow = copy(kmat)
+kmatχHigh = copy(kmat)
+kmatχLow = copy(kmat)
 
-display(surface(σValues, Nlist, wavelength, 
-zlim=(-0.0501,0.7001), camera=(0, 90), c=cmap,
-xticks=0:0.1:0.3, yticks=(0:20:100,(0:20:100...,:right)), zticks=false))
-png("phasediagram.png")
+λmat = 5 ./ kmat
+λmat = log10.(λmat)
+
+display(surface(σValues, Nlist, λmat, 
+zlim=(-0.0001, 4.0001), camera=(0, 90), c=cmap,
+xticks=0:0.1:0.5, yticks=(0:20:100,(0:20:100...,:right)), zticks=false))
+png("χLow.png")
+
+
