@@ -39,7 +39,7 @@ kmat = zeros(Float64, length(Nlist), length(σValues))
 
 for N in Nlist
     for σ in 1:length(σValues)
-        sFunc(k) = dispersion(k, N, 0.1, 0.001, 0.8, (σ-1)*σstep, 0.6, sqrt(N))
+        sFunc(k) = dispersion(k, N, 0.1, 0.001, 1, (σ-1)*σstep, 0.6, sqrt(N))
         intervals = find_zeros(sFunc, k)
         len = length(intervals)
         if len==1
