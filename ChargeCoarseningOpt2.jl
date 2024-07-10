@@ -12,6 +12,7 @@ using Symbolics
 using SparseArrays
 gr()
 
+# Computes dx/dy and cell locations
 function initialize_grid(nx, ny, L)
     dx = L / nx
     dy = L / ny
@@ -20,6 +21,7 @@ function initialize_grid(nx, ny, L)
     return dx, dy, x_centers, y_centers
 end
 
+# Fills matrix and ghost cells with given input values
 function fill_mat(nx, ny, phi)
     phi_mat=Matrix{Any}(undef, nx+2, ny+2)
 
@@ -36,6 +38,9 @@ function fill_mat(nx, ny, phi)
 
 end
 
+# Initializes the 3 phis, u, and psi and combines them into one vector
+# u = electrostatic potential
+# psi = -Laplacian of phi
 function initialize_solution(x_centers, y_centers, p)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal= p
     nx=length(x_centers)
@@ -58,7 +63,7 @@ function dae(dz, z, p, t)
     nx=convert(Int,nx)
     ny=convert(Int, ny)
     
-    
+    # converts z vector into matrices for 5 variables
     phi=reshape(z[1:nx*ny], (nx,ny))
     phicat=reshape(z[nx*ny+1:2*nx*ny], (nx,ny))
     phian=reshape(z[2*nx*ny+1:3*nx*ny], (nx,ny))
@@ -84,6 +89,7 @@ function dae(dz, z, p, t)
 
     mu=similar(phi)
     mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi.+sigma*u
+
 
 
 
