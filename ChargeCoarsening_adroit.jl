@@ -274,8 +274,8 @@ end
 
 
 # Example usage
-nx::Int = 100  # Number of spatial grid points in x-direction
-ny::Int = 100 # Number of spatial grid points in y-direction
+nx::Int = 50  # Number of spatial grid points in x-direction
+ny::Int = 50 # Number of spatial grid points in y-direction
 L=50
 
 

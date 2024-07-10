@@ -8,6 +8,8 @@ using BenchmarkTools
 using QuadGK
 using FFTW
 using SparseDiffTools
+using Symbolics
+using SparseArrays
 gr()
 
 function initialize_grid(nx, ny, L)
@@ -50,63 +52,8 @@ function initialize_solution(x_centers, y_centers, p)
 end
 
 
-# function dae(dz, z, p, t)  
-#     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal= p
-#     nx=convert(Int,nx)
-#     ny=convert(Int, ny)
-    
-#     # Reshape z into matrices
-#     @views phi = reshape(z[1:nx*ny], nx, ny)
-#     @views phicat = reshape(z[nx*ny+1:2*nx*ny], nx, ny)
-#     @views phian = reshape(z[2*nx*ny+1:3*nx*ny], nx, ny)
-#     @views u = reshape(z[3*nx*ny+1:4*nx*ny], nx, ny)
-#     @views psi = reshape(z[4*nx*ny+1:5*nx*ny], nx, ny)
-
-#     # Preallocate matrices
-#     @views phi_mat = fill_mat(nx, ny, phi)
-#     @views phicat_mat = fill_mat(nx, ny, phicat)
-#     @views phian_mat = fill_mat(nx, ny, phian)
-#     @views u_mat = fill_mat(nx, ny, u)
-#     @views psi_mat = fill_mat(nx, ny, psi)
-
-#     # Reshape dz into 3D array
-#     @views dz = reshape(dz, nx, ny, 5)
-
-#     @views mu_mat=similar(phi_mat)
-
-#     @views mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi
-#     @views mu_mat=fill_mat(nx,ny, mu)
-
-
-#     @views phi_flux_x=-(phi_mat[2:end,2:end-1].+phi_mat[1:end-1,2:end-1])/2 .*(mu_mat[2:end,2:end-1] .-mu_mat[1:end-1,2:end-1])/dx
-#     @views phi_flux_y=-(phi_mat[2:end-1,2:end].+phi_mat[2:end-1,1:end-1])/2 .*(mu_mat[2:end-1,2:end] .-mu_mat[2:end-1,1:end-1])/dy
-
-
-#     @views phicat_flux_x=-D*(phicat_mat[2:end,2:end-1] .-phicat_mat[1:end-1,2:end-1])/dx-D*(phicat_mat[2:end,2:end-1].+phicat_mat[1:end-1,2:end-1])/2 .*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
-#     @views phicat_flux_y=-D*(phicat_mat[2:end-1,2:end] .-phicat_mat[2:end-1,1:end-1])/dy-D*(phicat_mat[2:end-1,2:end].+phicat_mat[2:end-1,1:end-1])/2 .*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
-
-
-#     @views phian_flux_x=-D*(phian_mat[2:end,2:end-1] .-phian_mat[1:end-1,2:end-1])/dx+D*(phian_mat[2:end,2:end-1].+phian_mat[1:end-1,2:end-1])/2 .*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
-#     @views phian_flux_y=-D*(phian_mat[2:end-1,2:end] .-phian_mat[2:end-1,1:end-1])/dy+D*(phian_mat[2:end-1,2:end].+phian_mat[2:end-1,1:end-1])/2 .*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
-
-#     @views u_flux_x=-lambda^2*(u_mat[2:end,2:end-1] .-u_mat[1:end-1,2:end-1])/dx
-#     @views u_flux_y=-lambda^2*(u_mat[2:end-1,2:end] .-u_mat[2:end-1,1:end-1])/dy
-
-
-#     @views psi_flux_x=-(phi_mat[2:end,2:end-1] .-phi_mat[1:end-1,2:end-1])/dx
-#     @views psi_flux_y=-(phi_mat[2:end-1,2:end] .-phi_mat[2:end-1,1:end-1])/dy
-    
-#     @views dz[:,:,1]=-(phi_flux_x[2:end,:]-phi_flux_x[1:end-1,:])/dx - (phi_flux_y[:,2:end]-phi_flux_y[:,1:end-1])/dy
-#     @views dz[:,:,2]=-(phicat_flux_x[2:end,:]-phicat_flux_x[1:end-1,:])/dx - (phicat_flux_y[:,2:end]-phicat_flux_y[:,1:end-1])/dy
-#     @views dz[:,:,3]=-(phian_flux_x[2:end,:]-phian_flux_x[1:end-1,:])/dx - (phian_flux_y[:,2:end]-phian_flux_y[:,1:end-1])/dy
-#     @views dz[:,:,4]=-(u_flux_x[2:end,:]-u_flux_x[1:end-1,:])/dx - (u_flux_y[:,2:end]-u_flux_y[:,1:end-1])/dy.+sign.(phicat.-phian.+sigma*phi).*max.(abs.(phicat.-phian.+sigma*phi),1e-8 .*ones((nx,ny)))
-#     @views dz[:,:,5]=-(psi_flux_x[2:end,:]-psi_flux_x[1:end-1,:])/dx - (psi_flux_y[:,2:end]-psi_flux_y[:,1:end-1])/dy.+psi
-#     dz =reshape(dz, (5*nx*ny,1))
-
-# end
-
 function dae(dz, z, p, t)
-    # println(t)
+    println(t)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal= p
     nx=convert(Int,nx)
     ny=convert(Int, ny)
@@ -136,15 +83,7 @@ function dae(dz, z, p, t)
     psi_flux_y=similar(psi)
 
     mu=similar(phi)
-
- 
-   
-
-    # mu=-2*chi*phi .+psi .+sigma*u
-
-    # mu=log.(abs.(phi).^(1/N) .+1e-6) .-log.(abs.(1 .-phi).+1e-6) .-2*chi*phi.+ psi
-
-    mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi
+    mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi.+sigma*u
 
 
 
@@ -154,26 +93,8 @@ function dae(dz, z, p, t)
         jp1 = (j == ny) ? 1 : j + 1  # Periodic boundary condition
         jm1 = (j == 1) ? ny : j - 1  # Periodic boundary condition
 
-        # phi_flux_x[i,j] = -(1-(phi[ip1,j]+phi[i,j])/2)/N*(phi[ip1, j] - phi[i, j])/dx-((phi[ip1,j]+phi[i,j])/2)*(phi[ip1, j] - phi[i, j])/dx-(1-(phi[ip1,j]+phi[i,j])/2)*(phi[ip1,j]+phi[i,j])/2 * (mu[ip1, j] - mu[i, j])/dx
-        # phi_flux_y[i,j] = -(1-(phi[i,jp1]+phi[i,j])/2)/N*(phi[i, jp1] - phi[i, j])/dy-((phi[i,jp1]+phi[i,j])/2)*(phi[i, jp1] - phi[i, j])/dy-(1-(phi[i,jp1]+phi[i,j])/2)*(phi[i,jp1]+phi[i,j])/2 * (mu[i, jp1] - mu[i, j])/dy 
-        
-        # phi_flux_x[i,j] = -(1-(phi[ip1,j]+phi[i,j])/2)*(phi[ip1,j]+phi[i,j])/2 * (mu[ip1, j] - mu[i, j])/dx
-        # phi_flux_y[i,j] = -(1-(phi[i,jp1]+phi[i,j])/2)*(phi[i,jp1]+phi[i,j])/2 * (mu[i, jp1] - mu[i, j])/dy 
-
         phi_flux_x[i,j] = -(phi[ip1,j]+phi[i,j])/2 * (mu[ip1, j] - mu[i, j])/dx
         phi_flux_y[i,j] = -(phi[i,jp1]+phi[i,j])/2 * (mu[i, jp1] - mu[i, j])/dy 
-
-        # phi_flux_x[i,j] = -(1-phi[i,j])/N*(phi[ip1, j] - phi[i, j])/dx-phi[i,j]*(phi[ip1, j] - phi[i, j])/dx-(1-phi[i,j])*phi[i,j]* (mu[ip1, j] - mu[i, j])/dx
-        # phi_flux_y[i,j] = -(1-phi[i,j])/N*(phi[i, jp1] - phi[i, j])/dy-phi[i,j]*(phi[i, jp1] - phi[i, j])/dy-(1-phi[i,j])*phi[i,j]* (mu[i, jp1] - mu[i, j])/dy 
-
-        # phi_flux_x[i,j] = -(phi[ip1, j] - phi[i, j])/dx
-        # phi_flux_y[i,j] = -(phi[i, jp1] - phi[i, j])/dy
-
-        # phicat_flux_x[i,j] = -(phicat[ip1, j] - phicat[i, j])/dx
-        # phicat_flux_y[i,j] = -(phicat[i, jp1] - phicat[i, j])/dy
-
-        # phian_flux_x[i,j] = -(phian[ip1, j] - phian[i, j])/dx
-        # phian_flux_y[i,j] = -(phian[i, jp1] - phian[i, j])/dy
 
         phicat_flux_x[i,j] = -D*(phicat[ip1, j] - phicat[i, j])/dx-D*(phicat[ip1,j]+phicat[i,j])/2 * (u[ip1, j] - u[i, j])/dx
         phicat_flux_y[i,j] = -D*(phicat[i, jp1] - phicat[i, j])/dy-D*(phicat[i,jp1]+phicat[i,j])/2 * (u[i, jp1] - u[i, j])/dy
@@ -181,12 +102,6 @@ function dae(dz, z, p, t)
         phian_flux_x[i,j] = -D*(phian[ip1, j] - phian[i, j])/dx+D*(phian[ip1,j]+phian[i,j])/2 * (u[ip1, j] - u[i, j])/dx
         phian_flux_y[i,j] = -D*(phian[i, jp1] - phian[i, j])/dy+D*(phian[i,jp1]+phian[i,j])/2 * (u[i, jp1] - u[i, j])/dy
 
-        # phicat_flux_x[i,j] = -D*(phicat[ip1, j] - phicat[i, j])/dx-D*phicat[i,j] * (u[ip1, j] - u[i, j])/dx
-        # phicat_flux_y[i,j] = -D*(phicat[i, jp1] - phicat[i, j])/dy-D*phicat[i,j] * (u[i, jp1] - u[i, j])/dy
-
-        # phian_flux_x[i,j] = -D*(phian[ip1, j] - phian[i, j])/dx+D*phian[i,j] * (u[ip1, j] - u[i, j])/dx
-        # phian_flux_y[i,j] = -D*(phian[i, jp1] - phian[i, j])/dy+D*phian[i,j] * (u[i, jp1] - u[i, j])/dy
-        
         u_flux_x[i,j]=-lambda^2*(u[ip1, j] - u[i, j])/dx
         u_flux_y[i,j]=-lambda^2*(u[i, jp1] - u[i, j])/dy
 
@@ -204,28 +119,9 @@ function dae(dz, z, p, t)
         dz[i, j, 3] =  -(phian_flux_x[i,j]-phian_flux_x[im1,j])/dx - (phian_flux_y[i,j]-phian_flux_y[i,jm1])/dy
         dz[i, j, 4]= -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+sign((phicat[i,j]-phian[i,j]+sigma*phi[i,j]))*maximum((abs(phicat[i,j]-phian[i,j]+sigma*phi[i,j]), 1e-8))
         dz[i, j, 5]= -(psi_flux_x[i,j]-psi_flux_x[im1,j])/dx-(psi_flux_y[i,j]-psi_flux_y[i,jm1])/dy+psi[i,j]
-        # dz[i, j, 4]= phicat[i,j]-phian[i,j]+sigma*phi[i,j]
 
-        # dz[i,j,4]=u[i,j] 
-        # dz[i, j, 4]= -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy
-
-        # dz[i,j,5]=psi[i,j]
-        # dz[i, j,4] =  -(u_flux_x[i,j]-u_flux_x[im1,j])/dx - (u_flux_y[i,j]-u_flux_y[i,jm1])/dy
-        # dz[i, j, 5] =  -(psi_flux_x[i,j]-psi_flux_x[im1,j])/dx - (psi_flux_y[i,j]-psi_flux_y[i,jm1])/dy
-        if i==1 & j==1
-            dz[i, j, 4]= u[i,j]
-        end
     end
     dz =reshape(dz, (5*nx*ny,1))
-    println(t)
-    # if mod(round(t),5)==0
-    #     if mod(round(t*1000),5)==0
-    #         println(t)
-    #     end
-    # end
-    
-    
-
 
 end
 
@@ -249,10 +145,20 @@ function run_simulation(p)
         end
 
         # Compute sparse Jacobian
-        sparse_jac = (J, dz, z, p, t) -> SparseDiffTools.jacobian!(J, dae!, dz, z, p, t)
+        sparse_jac = (J, dz, z, p, t) -> SparseDiffTools.jacobian!(J, dae, dz, z, p, t)
 
-        f = ODEFunction(dae!, mass_matrix=M, jac_prototype=sparse_jac)
-        # f = ODEFunction(dae, mass_matrix=M)
+        # # Allocate space for the Jacobian
+        # J_prototype = spzeros(5*nx*ny, 5*nx*ny)
+
+        # # Define the sparse Jacobian function
+        # sparse_jacobian_fun!(J, dz, z, p, t) = SparseDiffTools.jacobian!(J, (dz, z, p, t) -> dae!(dz, z, p, t), dz, z, p, t)
+
+        # # Use the preallocated sparse Jacobian in ODEFunction
+        # f = ODEFunction(dae!, mass_matrix=M, jac_prototype=J_prototype, jac=sparse_jacobian_fun!)
+       
+
+        # f = ODEFunction(dae, mass_matrix=M, jac_prototype=sparse_jac)
+        f = ODEFunction(dae, mass_matrix=M)
         prob = ODEProblem(f, z0, tspan,p)
         sol = solve(prob,Rosenbrock23(),reltol=1e-6,abstol=1e-6, progress = true)
     end
@@ -264,12 +170,12 @@ function plot_solution(x_centers, y_centers, z, title_str,p)
     nx=convert(Int,nx)
     ny=convert(Int, ny)
     # surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, zlims=(0, 1), clim=(0, 1))
-    surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, clim=(0, 1), zlims=(0,1))
+    surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, zlims=(0, 1), clim=(0, 1))
 end
 
 function compute_structure_factor(field::Matrix{Float64})
     # Perform 2D Fourier Transform of the field
-    F = fftshift(fft(field))
+    F = fft(field.-mean(field))
 
     # Compute the magnitude squared (power spectrum)
     S = abs2.(F)
@@ -326,7 +232,6 @@ nx::Int = 20  # Number of spatial grid points in x-direction
 ny::Int = 20 # Number of spatial grid points in y-direction
 L=20
 
-
 N=10
 
 dx = L/ nx
@@ -334,7 +239,7 @@ dy = L / ny
 
 D=sqrt(N)
 lambda=0.6
-sigma=0.1
+sigma=0.01
 chi=(1+1/sqrt(N))^2/1.2
 phi0=1/(1+sqrt(N))
 phicat0=0.002
@@ -348,7 +253,7 @@ x_centers, y_centers, sol = run_simulation(p)
 t_values = sol.t  # Time values of simulation
 
 # Time points where you want to interpolate
-interpolation_times = 0:dt:tfinal
+interpolation_times = vcat(dt/100, dt/23, dt/10, dt/2.3,dt:dt:tfinal)
 Rt=similar(interpolation_times)
 anim = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
@@ -360,4 +265,4 @@ end
 gif(anim, "./animation_charged.gif", fps=4)
 
 # Create the plot
-plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", legend=false)
+plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", xscale=:log10,legend=false)
