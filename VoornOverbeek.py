@@ -32,20 +32,31 @@ def hinv(hx, laguerre_polynomials, num_terms=100):
     logeps[cond3] = logeps_cond3
 
     return logeps
+
 def hvoinv(A,B, laguerre_polynomials, num_terms=100):
     A = np.asarray(A)
     B = np.asarray(B)
     c1=1/(A-B)
     c2=-(A+B)/(A-B)
+    c10=-c1/c2
+    c20=1/c2
+
+    c10=1/(A+B)
+    c20=(B-A)/(A+B)
+
     x=-c1
+    x0=-c10
     for k in range(num_terms):
         L_k_minus_1_1 = laguerre_polynomials[k]  # Use precomputed Laguerre polynomial
         term = -(c2) ** (k+1) * ((c1-c1/c2)* np.exp(-(k+1)*c1) /(k+1)) * L_k_minus_1_1((k+1)*c1-(k+1)*c1/c2)
-        x += term
-    z=A*x/(1-B*x)
-    z=np.asarray(z)
+        term0 = -(c20) ** (k+1) * ((c10-c10/c20)* np.exp(-(k+1)*c10) /(k+1)) * L_k_minus_1_1((k+1)*c10-(k+1)*c10/c20)
 
-    cond1 = abs(z/A)<0.8
+        x += term
+        x0 +=term0
+    x=-x0
+    z=A*x/(1-B*x)
+
+    cond1 = abs(z)<0.01
 
     A=A[cond1]
     B=B[cond1]
@@ -58,7 +69,6 @@ laguerre_polynomials = generate_laguerre_polynomials(num_terms)
 z=-0.01
 A=0.2
 B=-A/z+1/np.log((1+z)/(1-z))
-print(B)
 # print(hvoinv(A,B, laguerre_polynomials))
 
 
@@ -70,8 +80,8 @@ hx=np.arctanh(x)/x
 #Specify parameters
 N1=10
 # Define the range and number of points for y1 and w2
-y1_values = 1-np.logspace(-8, np.log10(0.99), 100)
-tanhy1w2_values = np.logspace(-4, -0.0001, 100)
+y1_values = 1-np.logspace(-8, np.log10(0.99), 200)
+tanhy1w2_values = np.sort(np.concatenate([np.logspace(-6, -0.0001, 100),-np.logspace(-6, -0.0001, 100)]))
 
 # Create the grid
 Y1, tanhY1W2 = np.meshgrid(y1_values, tanhy1w2_values)
@@ -95,11 +105,12 @@ A=-((3 * (1 + w2 + w3)) / 2)/h
 B=((-3 * (1/y1 + w2 / y2 + w3 / y3) /2)+2*term25)/h
 
 
-z=hvoinv(A,B, laguerre_polynomials)
+z=abs(hvoinv(A,B, laguerre_polynomials))
 
 # print(z)
 #
-# print((A+B*z)*np.log((1+z)/(1-z))-z)
+
+print(((A+B*z)*np.log((1+z)/(1-z))-z)/z)
 
 
 
@@ -124,12 +135,15 @@ highlight_level = 4
 
 # Plot the grid using a heatmap
 plt.figure(figsize=(8, 6))
-plt.contourf(Y1, tanhY1W2, alpha, levels=50, cmap='viridis')
+plt.contourf(Y1, tanhY1W2, alpha, levels=100, cmap='viridis')
+levels = [5, 10, 20]
+colors=['blue','green','red']
 # Highlight the specific contour level
-#highlight_contour = plt.contour(Y1, tanhY1W2, alpha, levels=[highlight_level*0.99,highlight_level, highlight_level*1.01], colors='red', linewidths=2)
+highlight_contour = plt.contour(Y1, tanhY1W2, alpha, levels=levels, colors=colors, linewidths=2)
 
 plt.colorbar(label='alpha value')
 plt.xlabel('y1')
 plt.ylabel('tanh(w2y1)')
+plt.ylim(0, 1)
 plt.title('Phase diagram')
 plt.show()
