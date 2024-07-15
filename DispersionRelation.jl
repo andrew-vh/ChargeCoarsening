@@ -32,7 +32,7 @@ end
 
 k = 0:0.01:100
 σstep = 0.001
-Nlist = 1:1:100
+Nlist = 1:1:10000
 σValues = 0:σstep:0.3
 
 kmat = zeros(Float64, length(Nlist), length(σValues))
@@ -69,4 +69,24 @@ zlim=(-0.0001, 4.0001), camera=(0, 90), c=cmap,
 xticks=0:0.1:0.5, yticks=(0:20:100,(0:20:100...,:right)), zticks=false))
 png("χLow.png")
 
+kList = zeros(Float64, length(Nlist))
+for N in Nlist
+    sFunc(k) = dispersion(k, N, 0.1, 0.001, 0.8, 0.1, 0.6, sqrt(N))
+    intervals = find_zeros(sFunc, k)
+    len = length(intervals)
+        if len==1
+            kList[N] = 5
+        elseif len==2 && sFunc(intervals[2]/2) > 0
+            kList[N] = 0.0005
+        else
+            kList[N] = intervals[2]
+        end
+    println(N)
+end
 
+println(kList)
+
+λlist = 5 ./ kList
+λlist = log10.(λlist)
+
+display(plot(Nlist, λlist, seriestype=:scatter))
