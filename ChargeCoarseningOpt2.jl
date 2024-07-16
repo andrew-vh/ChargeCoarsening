@@ -8,8 +8,9 @@ using BenchmarkTools
 using QuadGK
 using FFTW
 using SparseDiffTools
-using Symbolics
 using SparseArrays
+using Printf
+using Symbolics
 gr()
 
 # Computes dx/dy and cell locations
@@ -123,7 +124,8 @@ function dae(dz, z, p, t)
         dz[i, j, 1] =  -(phi_flux_x[i,j]-phi_flux_x[im1,j])/dx - (phi_flux_y[i,j]-phi_flux_y[i,jm1])/dy
         dz[i, j, 2] =  -(phicat_flux_x[i,j]-phicat_flux_x[im1,j])/dx - (phicat_flux_y[i,j]-phicat_flux_y[i,jm1])/dy
         dz[i, j, 3] =  -(phian_flux_x[i,j]-phian_flux_x[im1,j])/dx - (phian_flux_y[i,j]-phian_flux_y[i,jm1])/dy
-        dz[i, j, 4]= -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+sign((phicat[i,j]-phian[i,j]+sigma*phi[i,j]))*maximum((abs(phicat[i,j]-phian[i,j]+sigma*phi[i,j]), 1e-8))
+        # dz[i, j, 4]= -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+sign((phicat[i,j]-phian[i,j]+sigma*phi[i,j]))*maximum((abs(phicat[i,j]-phian[i,j]+sigma*phi[i,j]), 1e-8))
+        dz[i, j, 4]= -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+sign((phicat[i,j]-phian[i,j]+sigma*phi[i,j]))*maximum((abs(phicat[i,j]-phian[i,j]+sigma*phi[i,j])))
         dz[i, j, 5]= -(psi_flux_x[i,j]-psi_flux_x[im1,j])/dx-(psi_flux_y[i,j]-psi_flux_y[i,jm1])/dy+psi[i,j]
 
     end
@@ -145,30 +147,33 @@ function run_simulation(p)
         M=I(5*nx*ny)
         M[3*nx*ny+1:end,3*nx*ny+1:end]=zeros((2*nx*ny, 2*nx*ny))
 
-        # Define DAE function
-        function dae!(dz, z, p, t)
-            dae(dz, z, p, t)
-        end
+        # Preallocate the Jacobian matrix
+        J = zeros(length(z0), length(z0))
+        dz0=copy(z0)
+        jac_sparsity = Symbolics.jacobian_sparsity((dz, z) -> dae(dz, z, p, 0.0), dz0, z0)
+        
+        
 
-        # Compute sparse Jacobian
-        sparse_jac = (J, dz, z, p, t) -> SparseDiffTools.jacobian!(J, dae, dz, z, p, t)
-
-        # # Allocate space for the Jacobian
-        # J_prototype = spzeros(5*nx*ny, 5*nx*ny)
-
-        # # Define the sparse Jacobian function
-        # sparse_jacobian_fun!(J, dz, z, p, t) = SparseDiffTools.jacobian!(J, (dz, z, p, t) -> dae!(dz, z, p, t), dz, z, p, t)
-
-        # # Use the preallocated sparse Jacobian in ODEFunction
-        # f = ODEFunction(dae!, mass_matrix=M, jac_prototype=J_prototype, jac=sparse_jacobian_fun!)
+        
+        
        
 
-        # f = ODEFunction(dae, mass_matrix=M, jac_prototype=sparse_jac)
-        f = ODEFunction(dae, mass_matrix=M)
+        f = ODEFunction(dae, mass_matrix=M, jac_prototype=float.(jac_sparsity))
+        # f = ODEFunction(dae, mass_matrix=M)
         prob = ODEProblem(f, z0, tspan,p)
-        sol = solve(prob,Rosenbrock23(),reltol=1e-6,abstol=1e-6, progress = true)
+        sol = solve(prob,Rosenbrock23(autodiff=false),reltol=1e-6,abstol=1e-6, progress = true)
     end
     return x_centers, y_centers, sol
+end
+
+# Define a wrapper function to use with ForwardDiff
+function dae_wrapper(z::AbstractVector, p, t)
+    dz = similar(z)
+    dae!(dz, z, p, t)
+    return dz
+end
+function compute_jacobian(dz, z, p, t)
+    ForwardDiff.jacobian((z) -> dae_wrapper(z, p, t), z, dz)
 end
 
 function plot_solution(x_centers, y_centers, z, title_str,p)
@@ -234,9 +239,9 @@ function find_R(phi)
 end
 
 # Example usage
-nx::Int = 20  # Number of spatial grid points in x-direction
-ny::Int = 20 # Number of spatial grid points in y-direction
-L=20
+nx::Int = 60  # Number of spatial grid points in x-direction
+ny::Int = nx # Number of spatial grid points in y-direction
+L=40
 
 N=10
 
@@ -245,11 +250,12 @@ dy = L / ny
 
 D=sqrt(N)
 lambda=0.6
-sigma=0.01
+sigma=0.1
 chi=(1+1/sqrt(N))^2/1.2
 phi0=1/(1+sqrt(N))
-phicat0=0.002
-phian0=0.002+sigma*phi0
+phis0=0.002
+phicat0=phis0
+phian0=phis0+sigma*phi0
 tfinal=1e3
 dt=tfinal/100
 
@@ -259,7 +265,8 @@ x_centers, y_centers, sol = run_simulation(p)
 t_values = sol.t  # Time values of simulation
 
 # Time points where you want to interpolate
-interpolation_times = vcat(dt/100, dt/23, dt/10, dt/2.3,dt:dt:tfinal)
+# interpolation_times = vcat(dt/100, dt/23, dt/10, dt/2.3,dt:dt:tfinal)
+interpolation_times = vcat(dt:dt:tfinal)
 Rt=similar(interpolation_times)
 anim = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
@@ -268,7 +275,7 @@ anim = @animate for j=1:length(interpolation_times)
     R=find_R(z_vals)
     Rt[j]=R
 end 
-gif(anim, "./animation_charged.gif", fps=4)
+gif(anim, "./animation_test"*@sprintf("%.2f", sigma)*"phis"*@sprintf("%.4f", phis0)*"N"*@sprintf("%.0f", N)*".gif", fps=4)
 
 # Create the plot
 plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", xscale=:log10,legend=false)
