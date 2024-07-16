@@ -5,34 +5,54 @@ from scipy.special import genlaguerre
 # Parameters
 num_terms = 100
 laguerre_polynomials = [genlaguerre(n, 1) for n in range(num_terms)]
-N1 = 100
-y1_values = 1-np.logspace(-2, np.log10(0.999), 200)
+N1 = 10
+y1_values = 1-np.logspace(-5, np.log10(0.999), 200)
 tanhy1w2_values = np.sort(np.concatenate([np.logspace(-8, -0.0001, 200),-np.logspace(-8, -0.0001, 200)]))
 alpha_crit = 3
 
 # Calculates z given A and B
-def hvoinv(A,B, laguerre_polynomials, num_terms):
+def hvoinv(A,B, laguerre_polynomials, num_terms=100):
     A = np.asarray(A)
     B = np.asarray(B)
-    c1 = 1/(A+B)
-    c2 = (B-A)/(A+B)
+    c1=1/(A-B)
+    c2=-(A+B)/(A-B)
+    c10=-c1/c2
+    c20=1/c2
 
-    x = -c1
+    c10=1/(A+B)
+    c20=(B-A)/(A+B)
 
+    x=-c1
+    x0=-c10
     for k in range(num_terms):
-        L_k_minus_1_1 = laguerre_polynomials[k]
+        L_k_minus_1_1 = laguerre_polynomials[k]  # Use precomputed Laguerre polynomial
         term = -(c2) ** (k+1) * ((c1-c1/c2)* np.exp(-(k+1)*c1) /(k+1)) * L_k_minus_1_1((k+1)*c1-(k+1)*c1/c2)
+        term0 = -(c20) ** (k+1) * ((c10-c10/c20)* np.exp(-(k+1)*c10) /(k+1)) * L_k_minus_1_1((k+1)*c10-(k+1)*c10/c20)
+
         x += term
-        print(k)
-    
-    z=-A*x/(1+B*x)
+        x0 +=term0
+    x=-x0
+    z=A*x/(1-B*x)
+    z=np.array(z)
+    if z.size>1:
+        cond1 = (abs(z)+abs(B*z/A))<0.5
+        A = np.complex128(A)
+        B = np.complex128(B)
 
-    cond1 = abs(z)<0.01
+        A=A[cond1]
+        B=B[cond1]
+        z[cond1]=(-3 * B + np.sqrt(3) * np.sqrt(2 * A - 4 * A**2 + 3 * B**2)) / (2 * A)
+        z[cond1] = ((-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3) / (6 * 2 ** (1 / 3) * B) -(36 * B ** 2 - 4 * A ** 2) / (3 * 2 ** (2 / 3) * B * (-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3)) -A / (3 * B))
+        z=z.real
+    else:
+        if (abs(z)+abs(B*z/A))<0.5:
+            A=np.complex128(A)
+            B=np.complex128(B)
+            z = ((-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3) / (6 * 2 ** (1 / 3) * B) - (36 * B ** 2 - 4 * A ** 2) / (3 * 2 ** (2 / 3) * B * (-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3)) - A / (3 * B))
+            z=z.real
 
-    A=A[cond1]
-    B=B[cond1]
-    z[cond1] = ((-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3) / (6 * 2 ** (1 / 3) * B) -(36 * B ** 2 - 4 * A ** 2) / (3 * 2 ** (2 / 3) * B * (-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3)) -A / (3 * B))
     return z
+
 
 # Solves for all variables given a range of y1 and tanh(y1, w2)
 def master(N1, y1_values, tanhy1w2_values, num_terms):
