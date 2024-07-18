@@ -9,9 +9,14 @@ using Interpolations
 using ProgressLogging
 using ForwardDiff
 using BenchmarkTools
+using QuadGK
+using FFTW
 using SparseDiffTools
 using SparseArrays
+using Printf
 using Symbolics
+using CSV
+using DataFrames
 
 ENV["GKSwstype"]="nul"
  
@@ -226,6 +231,59 @@ function plot_solution(x_centers, y_centers, z, title_str,p)
     surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, clim=(0, 1), zlims=(0,1))
 end
 
+function compute_structure_factor(field::Matrix{Float64})
+    # Perform 2D Fourier Transform of the field
+    F = fft(field.-mean(field))
+
+    # Compute the magnitude squared (power spectrum)
+    S = abs2.(F)
+
+    return S
+end
+
+# Function to compute radial average
+function radial_average(S::Matrix{Float64})
+    nx, ny = size(S)
+    center_x, center_y = div(nx, 2), div(ny, 2)
+    radial_bins = collect(0:0.1:maximum(hypot.(1:nx .- center_x, 1:ny .- center_y)))
+    radial_profile = zeros(length(radial_bins))
+
+    bin_counts = zeros(length(radial_bins))
+
+    for i in 1:nx
+        for j in 1:ny
+            r = hypot(i - center_x, j - center_y)
+            bin = searchsortedfirst(radial_bins, r)
+            if bin > 0 && bin <= length(radial_bins)
+                radial_profile[bin] += S[i, j]
+                bin_counts[bin] += 1
+            end
+        end
+    end
+
+    # Avoid division by zero by using only non-zero bin counts
+    radial_profile = radial_profile ./ max.(bin_counts, 1)
+
+    return radial_bins, radial_profile
+end
+
+function trapezoidal_integration(x::Vector{Float64}, y::Vector{Float64})
+    n = length(x)
+    integral = 0.0
+    for i in 1:n-1
+        integral += 0.5 * (x[i+1] - x[i]) * (y[i+1] + y[i])
+    end
+    return integral
+end
+
+function find_R(phi)
+    S = compute_structure_factor(phi)
+    radial_bins, radial_profile = radial_average(S)
+    integral1 = trapezoidal_integration(radial_bins, radial_profile)
+    integral2=trapezoidal_integration(radial_bins, radial_bins.*radial_profile)
+    R=integral2/integral1
+    return R
+end
 
 
 # Example usage
@@ -254,6 +312,10 @@ p=[L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal]
 x_centers, y_centers, sol = run_simulation(p)
 t_values = sol.t  # Time values of simulation
 
+mkdir("output1")
+cd("output1")
+CSV.write("simdata.csv", DataFrame(sol), header=false)
+
 # Time points where you want to interpolate
 interpolation_times = 0:dt:tfinal
 Rt=similar(interpolation_times)
@@ -261,8 +323,16 @@ anim = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     z_vals=reshape(interpolated_solution[1:nx*ny],(nx,ny))
     plot_solution(x_centers, y_centers, z_vals,string(interpolation_times[j]),p)
+    Rt[j]=find_R(z_vals)
 end 
-gif(anim, "animation5.gif", fps=4)
+gif(anim, "animation.gif", fps=4)
+
+parameters = "N=$N, σ=$sigma, ϕ0=$phi0, ϕ+=$phicat0, χ=$chi"
+open("parameters.txt", "w") do file
+    write(file, parameters)
+end
+CSV.write("Rdata.csv", DataFrame(Rt), header=false)
+
 
 # # Create the plot
 # plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", legend=false)
