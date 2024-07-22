@@ -1,7 +1,9 @@
 using Plots
 using Roots
 
-cmap = cgrad(:oslo, rev=true)
+gr()
+#pyplot()
+cmap = cgrad(:viridis)
 
 # Returns s as a function of k and parameters
 function dispersion(k, N, ϕ0, c0, χ, σ, λ, D)
@@ -54,11 +56,52 @@ function limsigmablack(ϕ0, c0, χ, λ)
 end
 
 # Generates a phase diagram of N and σ given parameters
-function phasediagram(ϕ0, c0, χ, λ)
+# function phasediagram(ϕ0, c0, χ, λ)
+#     k = 0:0.01:100
+#     σstep = 0.004
+#     Nlist = 1:1:500
+#     σValues = 0:σstep:0.4
+
+#     kmat = zeros(Float64, length(Nlist), length(σValues))
+
+#     for N in Nlist
+#         for σ in 1:length(σValues)
+#             sFunc(k) = dispersion(k, N, ϕ0, c0, χ, (σ-1)*σstep, λ, sqrt(N))
+#             intervals = find_zeros(sFunc, k)
+#             len = length(intervals)
+#             if len==1
+#                 kmat[N, σ] = 5
+#             elseif len==2 && sFunc(intervals[2]/2) > 0
+#                 kmat[N, σ] = 0.0005
+#             else
+#                 kmat[N, σ] = intervals[2]
+#             end
+#         end
+#         println(N)
+#     end
+
+#     λmat = 5 ./ kmat
+#     λmat = log10.(λmat)
+
+#     surface(Nlist, σValues, λmat', 
+#     zlim=(-0.0001, 4.0001), xlim=(0, 500), ylim=(0, 0.4), camera=(0, 90), c=cmap,
+#     xticks=0:100:500, yticks=0:0.1:0.4, zticks=false)
+#     whiteline = sigmawhite(Nlist, ϕ0, c0, χ, λ)
+#     blackline = sigmablack(Nlist, ϕ0, c0, χ, λ)
+#     whiteline[whiteline .< 0] .= 1
+#     diff = whiteline .- blackline
+#     index = argmin(diff)
+#     whiteline[1:index] = blackline[1:index]
+    
+#     plot!(Nlist, whiteline, 4*ones(length(Nlist)), color=:black, linewidth=3)
+#     plot!(Nlist, blackline, 4*ones(length(Nlist)), color=:white, linewidth=3)
+# end
+
+function phasediagram2(ϕ0, c0, χ, λ, Nmax, σmax)
     k = 0:0.01:100
-    σstep = 0.004
-    Nlist = 1:1:500
-    σValues = 0:σstep:0.4
+    σstep = σmax/100
+    Nlist = 1:1:Nmax
+    σValues = 0:σstep:σmax
 
     kmat = zeros(Float64, length(Nlist), length(σValues))
 
@@ -68,9 +111,9 @@ function phasediagram(ϕ0, c0, χ, λ)
             intervals = find_zeros(sFunc, k)
             len = length(intervals)
             if len==1
-                kmat[N, σ] = 5
+                kmat[N, σ] = 0.1
             elseif len==2 && sFunc(intervals[2]/2) > 0
-                kmat[N, σ] = 0.0005
+                kmat[N, σ] = 0.1
             else
                 kmat[N, σ] = intervals[2]
             end
@@ -81,40 +124,45 @@ function phasediagram(ϕ0, c0, χ, λ)
     λmat = 5 ./ kmat
     λmat = log10.(λmat)
 
-    surface(Nlist, σValues, λmat', 
-    zlim=(-0.0001, 4.0001), xlim=(0, 500), ylim=(0, 0.4), camera=(0, 90), c=cmap,
-    xticks=0:100:500, yticks=0:0.1:0.4, zticks=false)
+    heatmap(Nlist, σValues, λmat', 
+    xlim=(1, Nmax), ylim=(0, σmax), c=cmap, clim=(1, 3),
+    xticks=0:Nmax/5:Nmax, yticks=0:0.1:σmax)
     whiteline = sigmawhite(Nlist, ϕ0, c0, χ, λ)
     blackline = sigmablack(Nlist, ϕ0, c0, χ, λ)
     whiteline[whiteline .< 0] .= 1
     diff = whiteline .- blackline
     index = argmin(diff)
     whiteline[1:index] = blackline[1:index]
-
-    plot!(Nlist, whiteline, 4*ones(length(Nlist)), color=:black, linewidth=3)
-    plot!(Nlist, blackline, 4*ones(length(Nlist)), color=:white, linewidth=3)
+    plot!(Nlist, whiteline, fillrange=1, color=:white, legend=false, xlabel='N', ylabel='σ', title="Maximum Wavelength Instability")
+    plot!(Nlist, blackline, fillrange=0, color=:black)
+    plot!(Nlist, whiteline, color=:black, linewidth=3)
+    plot!(Nlist, blackline, color=:white, linewidth=3)
 end
 
-phasediagram(0.01, 0.01, 1, 0.6)
-png("Nσdiagram2.png")
+phasediagram2(0.01, 0.01, 1, 0.6, 500, 0.4)
+
+#phasediagram(0.01, 0.01, 1, 0.6)
+savefig("Nσdiagram2.pdf")
 
 # Generates a phase diagram of ϕ0 and σ in the large N limit
-function phasediagramϕ(c0, χ, λ)
+function phasediagramϕ(c0, χ, λ, ϕmax, σmax)
     k = 0:0.01:100
-    ϕvalues = 0:0.002:0.6
-    σValues = 0:0.004:0.4
+    ϕstep = ϕmax/200
+    σstep = σmax/100
+    ϕvalues = 0:ϕstep:ϕmax
+    σValues = 0:σstep:σmax
 
     kmat = zeros(Float64, length(ϕvalues), length(σValues))
 
     for ϕ0 in 1:length(ϕvalues)
         for σ in 1:length(σValues)
-            sFunc(k) = dispersion(k, 10000, (ϕ0-1)*0.002, c0, χ, (σ-1)*0.004, λ, 100)
+            sFunc(k) = dispersion(k, 10000, (ϕ0-1)*ϕstep, c0, χ, (σ-1)*σstep, λ, 100)
             intervals = find_zeros(sFunc, k)
             len = length(intervals)
             if len==1
-                kmat[ϕ0, σ] = 5
+                kmat[ϕ0, σ] = 0.5
             elseif len==2 && sFunc(intervals[2]/2) > 0
-                kmat[ϕ0, σ] = 0.0005
+                kmat[ϕ0, σ] = 0.5
             else
                 kmat[ϕ0, σ] = intervals[2]
             end
@@ -125,41 +173,43 @@ function phasediagramϕ(c0, χ, λ)
     λmat = 5 ./ kmat
     λmat = log10.(λmat)
 
-    surface(ϕvalues, σValues, λmat', 
-    zlim=(-0.0001, 4.0001), xlim=(0, 0.6), ylim=(0, 0.4), camera=(0, 90), c=cmap, clim=(0, 4),
-    xticks=0:0.1:0.6, yticks=0:0.1:0.4, zticks=false)
-
+    heatmap(ϕvalues, σValues, λmat', 
+    xlim=(0.01, ϕmax), ylim=(0, σmax), c=cmap, clim=(1, 3),
+    xticks=0:0.1:ϕmax, yticks=0:0.1:σmax)
     whiteline = limsigmawhite.(ϕvalues, c0, χ, λ)
     blackline = limsigmablack.(ϕvalues, c0, χ, λ)
     whiteline[whiteline .< 0] .= 1
     diff = whiteline .- blackline
     index = argmin(diff)
     whiteline[index:length(ϕvalues)] = blackline[index:length(ϕvalues)]
-
-    plot!(ϕvalues, whiteline, 4*ones(length(ϕvalues)), color=:black, linewidth=3)
-    plot!(ϕvalues, blackline, 4*ones(length(ϕvalues)), color=:white, linewidth=3)
+    plot!(ϕvalues, whiteline, fillrange=1, color=:white, legend=false, xlabel='ϕ', ylabel='σ', title="Maximum Wavelength Instability")
+    plot!(ϕvalues, blackline, fillrange=0, color=:black)
+    plot!(ϕvalues, whiteline, color=:black, linewidth=3)
+    plot!(ϕvalues, blackline, color=:white, linewidth=3)
 end
 
-phasediagramϕ(0.01, 1, 0.6)
-png("ϕpσdiagram2.png")
+phasediagramϕ(0.01, 1, 0.6, 0.6, 0.4)
+savefig("ϕ0σdiagram2.pdf")
 
 # Generates a phase diagram of c0 and σ in the large N limit
-function phasediagramc(ϕ0, χ, λ)
+function phasediagramc(ϕ0, χ, λ, cmax, σmax)
     k = 0:0.01:100
-    cvalues = 0:0.0005:0.05
-    σValues = 0:0.001:0.4
+    cstep=cmax/400
+    σstep=σmax/200
+    cvalues = 0:cstep:cmax
+    σValues = 0:σstep:σmax
 
     kmat = zeros(Float64, length(cvalues), length(σValues))
 
     for c0 in 1:length(cvalues)
         for σ in 1:length(σValues)
-            sFunc(k) = dispersion(k, 10000, ϕ0, (c0-1)*0.0005, χ, (σ-1)*0.001, λ, 100)
+            sFunc(k) = dispersion(k, 10000, ϕ0, (c0-1)*cstep, χ, (σ-1)*σstep, λ, 100)
             intervals = find_zeros(sFunc, k)
             len = length(intervals)
             if len==1
-                kmat[c0, σ] = 5
+                kmat[c0, σ] = 0.1
             elseif len==2 && sFunc(intervals[2]*0.99) >= 0
-                kmat[c0, σ] = 0.0005
+                kmat[c0, σ] = 0.1
             elseif intervals[2]<0.0005 || intervals[2]>5
                 kmat[c0, σ] = kmat[c0, max(σ-1, 1)]
             else
@@ -169,26 +219,25 @@ function phasediagramc(ϕ0, χ, λ)
         println(c0)
     end
 
-    println(maximum(kmat))
-    println(minimum(kmat))
     λmat = 5 ./ kmat
     λmat = log10.(λmat)
-    # for c0 in 1:length(cvalues)
-    #     for σ in reverse(1:length(σValues)-1)
-    #         if λmat[c0, σ] < λmat[c0, σ+1]
-    #             λmat[c0, σ] = λmat[c0, σ+1]
-    #         end
-    #     end
-    # end
 
-    surface(cvalues, σValues, λmat', 
-    zlim=(-0.0001, 4.0001), xlim=(0, 0.05), ylim=(0, 0.4), camera=(0, 90), c=cmap, clim=(0, 4),
-    xticks=0:0.01:0.05, yticks=0:0.1:0.4, zticks=false)
-    plot!(cvalues, limsigmawhite.(ϕ0, cvalues, χ, λ), 4*ones(length(cvalues)), color=:black, linewidth=3)
-    plot!(cvalues, limsigmablack.(ϕ0, cvalues, χ, λ), 4*ones(length(cvalues)), color=:white, linewidth=3)
+    heatmap(cvalues, σValues, λmat', 
+    xlim=(0, cmax), ylim=(0, σmax), c=cmap, clim=(1, 3),
+    xticks=0:0.01:cmax, yticks=0:0.1:σmax)
+    whiteline = limsigmawhite.(ϕ0, cvalues, χ, λ)
+    blackline = limsigmablack.(ϕ0, cvalues, χ, λ)
+    whiteline[whiteline .< 0] .= 1
+    diff = whiteline .- blackline
+    index = argmin(diff)
+    whiteline[index:length(cvalues)] = blackline[index:length(cvalues)]
+    plot!(cvalues, whiteline, fillrange=1, color=:white, legend=false, xlabel="c0", ylabel='σ', title="Maximum Wavelength Instability")
+    plot!(cvalues, blackline, fillrange=0, color=:black)
+    plot!(cvalues, whiteline, color=:black, linewidth=3)
+    plot!(cvalues, blackline, color=:white, linewidth=3)
 end
 
-phasediagramc(0.01, 1, 0.6)
+phasediagramc(0.01, 1, 0.6, 0.05, 0.4)
 png("ϕ+σdiagram2.png")
 
 # Generates a phase diagram of χ and σ in the large N limit
@@ -253,7 +302,7 @@ function determinestability(N, ϕ0, c0, χ, σ, λ)
     end
 end
 
-determinestability(20, 0.1, 0.001, 1, 0.1, 0.6)
+determinestability(50, 0.1, 0.01, 1, 0.4, 0.6)
 
 # kList = zeros(Float64, length(Nlist))
 # for N in Nlist
