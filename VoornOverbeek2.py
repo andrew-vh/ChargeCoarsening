@@ -6,7 +6,7 @@ from scipy.special import genlaguerre
 num_terms = 100
 laguerre_polynomials = [genlaguerre(n, 1) for n in range(num_terms)]
 N1 = 10
-y1_values = 1-np.logspace(-5, np.log10(0.999), 200)
+y1_values = 1-np.logspace(-10, np.log10(0.999), 200)
 tanhy1w2_values = np.sort(np.concatenate([np.logspace(-8, -0.0001, 200),-np.logspace(-8, -0.0001, 200)]))
 alpha_crit = 3
 
@@ -57,15 +57,16 @@ def hvoinv(A,B, laguerre_polynomials, num_terms=100):
 # Solves for all variables given a range of y1 and tanh(y1, w2)
 def master(N1, y1_values, tanhy1w2_values, num_terms):
     y1, tanhy1w2 = np.meshgrid(y1_values, tanhy1w2_values)
+    atanhy1 = np.arctanh(y1)
     w2 = np.arctanh(tanhy1w2)/y1
 
     y2=np.tanh(np.arctanh(y1)/N1)
     y3=(1 + w2) / (1/y1 + w2/y2)
     w3 = ((1 + y1) * y3) / (y1 * (1 + y3)) + (w2 * (1 + y2) * y3) / (y2 * (1 + y3))
 
-    term25 = (1 / y1) + (w2 / y2) + 0.5 * np.sqrt((1 + y1) / y1 + w2 * (1 + y2) / y2) * np.sqrt((1 - y1) / y1 + w2 * (1 - y2) / y2)
+    term25 = (1 / y1) + (w2 / y2) + 0.5 * np.sqrt((1 + y1) / y1 + w2 * (1 + y2) / y2) * np.sqrt((1-y1) / y1 + w2 * (1 - y2) / y2)
     term26= (1+y2)/(1-y2)
-    term27= ((1 + y1) / y1 + w2 * (1 + y2) / y2) / ((1 - y1) / y1 + w2 * (1 - y2) / y2)
+    term27= ((1 + y1) / y1 + w2 * (1 + y2) / y2) / ((1-y1) / y1 + w2 * (1 - y2) / y2)
 
     h = (3 * (1 / N1 - 1) - term25 * (np.log(term26) + np.log(term27)))
 
@@ -151,8 +152,8 @@ def plot2(phi1Acrit, phi1Bcrit, phi2Acrit, phi2Bcrit):
     plt.scatter(np1B, np2B)
     for i in range(len(np1A)):
         plt.plot([np1A[i], np1B[i]], [np2A[i], np2B[i]], linestyle='--', linewidth=0.1)
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
+    plt.xlim(0, 0.5)
+    plt.ylim(0, 0.5)
     plt.title('Phase diagram')
     plt.xlabel('phi1')
     plt.ylabel('phi_salt')
@@ -165,10 +166,19 @@ plot2(phi1Acrit, phi1Bcrit, phi2Acrit, phi2Bcrit)
 def check(N1, phi1A, phi1B, phi2A, phi2B, alpha):
     mudiffA = np.log(phi1A) / N1 - np.log(phi2A)
     mudiffB = np.log(phi1B) / N1 - np.log(phi2B)
+    print(mudiffA)
+    mudifferror = np.abs(mudiffA - mudiffB)
+    print(np.max(mudifferror))
+
     mu2A = np.log(phi2A) + np.log(phi1A+phi2A) - 2*np.log(1-2*(phi1A+phi2A)) - 3*np.sqrt(2)*alpha*np.sqrt(phi1A+phi2A)
     mu2B = np.log(phi2B) + np.log(phi1B+phi2B) - 2*np.log(1-2*(phi1B+phi2B)) - 3*np.sqrt(2)*alpha*np.sqrt(phi1B+phi2B)
+    mu2error = np.abs(mu2A - mu2B)
+    print(np.max(mu2error))
+
     piA = -np.log(1-2*(phi1A+phi2A)) - np.sqrt(2)*alpha*np.power(phi1A+phi2A, 1.5) + (1/N1 - 1)*phi1A
     piB = -np.log(1-2*(phi1B+phi2B)) - np.sqrt(2)*alpha*np.power(phi1B+phi2B, 1.5) + (1/N1 - 1)*phi1B
+    pierror = np.abs(piA - piB)
+    print(np.max(pierror))
     
     plt.figure(figsize=(8,6))
     plt.plot(mudiffA, mudiffA, color='red')
