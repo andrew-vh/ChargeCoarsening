@@ -146,7 +146,7 @@ def multisigmaplot(y, num_terms):
     plt.scatter([phiA[index]], [alpha[index]], color='blue')
 
     plt.xlim(0, 1)
-    plt.ylim(0, 50)
+    plt.ylim(0, 40)
     plt.xlabel('phi')
     plt.ylabel('alpha')
     plt.title('Phase diagram')
