@@ -63,6 +63,8 @@ function dae(dz, z, p, t)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal= p
     nx=convert(Int,nx)
     ny=convert(Int, ny)
+
+    
     
     # converts z vector into matrices for 5 variables
     phi=reshape(z[1:nx*ny], (nx,ny))
@@ -70,6 +72,14 @@ function dae(dz, z, p, t)
     phian=reshape(z[2*nx*ny+1:3*nx*ny], (nx,ny))
     u=reshape(z[3*nx*ny+1:4*nx*ny], (nx,ny))
     psi=reshape(z[4*nx*ny+1:5*nx*ny], (nx,ny))
+
+    phi_sign =sign.(phi)
+    phicat_sign =sign.(phicat)
+    phian_sign=sign.(phian)
+
+    phi=abs.(phi)
+    phicat=abs.(phicat)
+    phian=abs.(phian)
 
     dz=reshape(dz, (nx,ny, 5))
     
@@ -89,8 +99,9 @@ function dae(dz, z, p, t)
     psi_flux_y=similar(psi)
 
     mu=similar(phi)
-    mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi.+sigma*u
+    # mu=(1/N).*log.(abs.(phi)./abs.(1 .-phi).^N).-2*chi*abs.(phi).+ psi.+sigma*u
 
+    mu=-log.(abs.(1 .-phi)).-2*chi*abs.(phi).+ psi.+sigma*u
 
 
 
@@ -100,8 +111,8 @@ function dae(dz, z, p, t)
         jp1 = (j == ny) ? 1 : j + 1  # Periodic boundary condition
         jm1 = (j == 1) ? ny : j - 1  # Periodic boundary condition
 
-        phi_flux_x[i,j] = -(phi[ip1,j]+phi[i,j])/2 * (mu[ip1, j] - mu[i, j])/dx
-        phi_flux_y[i,j] = -(phi[i,jp1]+phi[i,j])/2 * (mu[i, jp1] - mu[i, j])/dy 
+        phi_flux_x[i,j] = -(1/N)*(phi[ip1, j] - phi[i, j])/dx-(phi[ip1,j]+phi[i,j])/2 * (mu[ip1, j] - mu[i, j])/dx
+        phi_flux_y[i,j] = -(1/N)*(phi[i, jp1] - phi[i, j])/dy-(phi[i,jp1]+phi[i,j])/2 * (mu[i, jp1] - mu[i, j])/dy 
 
         phicat_flux_x[i,j] = -D*(phicat[ip1, j] - phicat[i, j])/dx-D*(phicat[ip1,j]+phicat[i,j])/2 * (u[ip1, j] - u[i, j])/dx
         phicat_flux_y[i,j] = -D*(phicat[i, jp1] - phicat[i, j])/dy-D*(phicat[i,jp1]+phicat[i,j])/2 * (u[i, jp1] - u[i, j])/dy
@@ -113,20 +124,31 @@ function dae(dz, z, p, t)
         u_flux_y[i,j]=-lambda^2*(u[i, jp1] - u[i, j])/dy
 
 
-        psi_flux_x[i,j]=-(phi[ip1, j] - phi[i, j])/dx
-        psi_flux_y[i,j]=-(phi[i, jp1] - phi[i, j])/dy
+        psi_flux_x[i,j]=-((phi[ip1, j]) - (phi[i, j]))/dx
+        psi_flux_y[i,j]=-((phi[i, jp1]) - (phi[i, j]))/dy
     end
     for i in 1:nx, j in 1:ny
         ip1 = (i == nx) ? 1 : i + 1  # Periodic boundary condition
         im1 = (i == 1) ? nx : i - 1  # Periodic boundary condition
         jp1 = (j == ny) ? 1 : j + 1  # Periodic boundary condition
         jm1 = (j == 1) ? ny : j - 1  # Periodic boundary condition
-        dz[i, j, 1] =  -(phi_flux_x[i,j]-phi_flux_x[im1,j])/dx - (phi_flux_y[i,j]-phi_flux_y[i,jm1])/dy
-        dz[i, j, 2] =  -(phicat_flux_x[i,j]-phicat_flux_x[im1,j])/dx - (phicat_flux_y[i,j]-phicat_flux_y[i,jm1])/dy
-        dz[i, j, 3] =  -(phian_flux_x[i,j]-phian_flux_x[im1,j])/dx - (phian_flux_y[i,j]-phian_flux_y[i,jm1])/dy
-        # dz[i, j, 4]= -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+sign((phicat[i,j]-phian[i,j]+sigma*phi[i,j]))*maximum((abs(phicat[i,j]-phian[i,j]+sigma*phi[i,j]), 1e-8))
-        dz[i, j, 4]= -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+sign((phicat[i,j]-phian[i,j]+sigma*phi[i,j]))*maximum((abs(phicat[i,j]-phian[i,j]+sigma*phi[i,j])))
-        dz[i, j, 5]= -(psi_flux_x[i,j]-psi_flux_x[im1,j])/dx-(psi_flux_y[i,j]-psi_flux_y[i,jm1])/dy+psi[i,j]
+
+        dphi=-(phi_flux_x[i,j]-phi_flux_x[im1,j])/dx - (phi_flux_y[i,j]-phi_flux_y[i,jm1])/dy
+        dphicat=  -(phicat_flux_x[i,j]-phicat_flux_x[im1,j])/dx - (phicat_flux_y[i,j]-phicat_flux_y[i,jm1])/dy
+        dphian= -(phian_flux_x[i,j]-phian_flux_x[im1,j])/dx - (phian_flux_y[i,j]-phian_flux_y[i,jm1])/dy
+        ures=-(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+sign((abs(phicat[i,j])-abs(phian[i,j])+sigma*abs(phi[i,j])))*maximum((abs(phicat[i,j]-phian[i,j]+sigma*phi[i,j])))
+        psires=-(psi_flux_x[i,j]-psi_flux_x[im1,j])/dx-(psi_flux_y[i,j]-psi_flux_y[i,jm1])/dy+psi[i,j]
+
+        
+        dz[i, j, 1] =  dphi*phi_sign[i,j]
+        dz[i, j, 2] = dphicat*phicat_sign[i,j]
+        dz[i, j, 3] =  dphian*phian_sign[i,j]
+        dz[i, j, 4]= ures
+        dz[i, j, 5]= psires
+
+        if i==1 && j==1
+            dz[i, j, 4]= u[i,j]
+        end
 
     end
     dz =reshape(dz, (5*nx*ny,1))
@@ -146,10 +168,8 @@ function run_simulation(p)
         # Solve the DAE using ode15s
         M=I(5*nx*ny)
         M[3*nx*ny+1:end,3*nx*ny+1:end]=zeros((2*nx*ny, 2*nx*ny))
-
-        # Preallocate the Jacobian matrix
-        J = zeros(length(z0), length(z0))
-        dz0=copy(z0)
+ 
+        dz0=0*z0
         jac_sparsity = Symbolics.jacobian_sparsity((dz, z) -> dae(dz, z, p, 0.0), dz0, z0)
         
         
@@ -176,12 +196,12 @@ function compute_jacobian(dz, z, p, t)
     ForwardDiff.jacobian((z) -> dae_wrapper(z, p, t), z, dz)
 end
 
-function plot_solution(x_centers, y_centers, z, title_str,p)
+function plot_solution(x_centers, y_centers, z, title_str,p, zlimits)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
     nx=convert(Int,nx)
     ny=convert(Int, ny)
     # surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, zlims=(0, 1), clim=(0, 1))
-    surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, zlims=(0, 1), clim=(0, 1))
+    surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, zlims=zlimits, clim=zlimits)
 end
 
 function compute_structure_factor(field::Matrix{Float64})
@@ -239,21 +259,24 @@ function find_R(phi)
 end
 
 # Example usage
-nx::Int = 60  # Number of spatial grid points in x-direction
+nx::Int = 20  # Number of spatial grid points in x-direction
 ny::Int = nx # Number of spatial grid points in y-direction
-L=40
+L=20
 
-N=10
+N=100
 
 dx = L/ nx
 dy = L / ny
 
 D=sqrt(N)
 lambda=0.6
-sigma=0.1
+sigma=0.01
 chi=(1+1/sqrt(N))^2/1.2
+chi=1
 phi0=1/(1+sqrt(N))
+phi0=0.1
 phis0=0.002
+phis0=0.01
 phicat0=phis0
 phian0=phis0+sigma*phi0
 tfinal=1e3
@@ -270,12 +293,26 @@ interpolation_times = vcat(dt:dt:tfinal)
 Rt=similar(interpolation_times)
 anim = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
-    z_vals=reshape(interpolated_solution[1:nx*ny],(nx,ny))
-    plot_solution(x_centers, y_centers, z_vals,string(interpolation_times[j]),p)
+    z_vals=abs.(reshape(interpolated_solution[1:nx*ny],(nx,ny)))
+    zlimits=(0,1)
+    plot_solution(x_centers, y_centers, z_vals,string(interpolation_times[j]),p, zlimits)
     R=find_R(z_vals)
     Rt[j]=R
 end 
-gif(anim, "./animation_test"*@sprintf("%.2f", sigma)*"phis"*@sprintf("%.4f", phis0)*"N"*@sprintf("%.0f", N)*".gif", fps=4)
+gif(anim, "./animation_sigma"*@sprintf("%.2f", sigma)*"phis"*@sprintf("%.4f", phis0)*"N"*@sprintf("%.0f", N)*".gif", fps=4)
+umat=sol(interpolation_times[end])[3*nx*ny+1:4*nx*ny]
+umat=umat.-mean(umat)
+zlimits=(-1, 1)
+anim = @animate for j=1:length(interpolation_times)
+    interpolated_solution=sol(interpolation_times[j])
+    z_vals=reshape(interpolated_solution[3*nx*ny+1:4*nx*ny],(nx,ny))
+    z_vals=z_vals.-mean(z_vals)
+    plot_solution(x_centers, y_centers, z_vals,string(interpolation_times[j]),p, zlimits)
+    R=find_R(z_vals)
+    Rt[j]=R
+end 
+gif(anim, "./animation_u_sigma_"*@sprintf("%.2f", sigma)*"phis"*@sprintf("%.4f", phis0)*"N"*@sprintf("%.0f", N)*".gif", fps=4)
+
 
 # Create the plot
 plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", xscale=:log10,legend=false)
