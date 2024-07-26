@@ -77,9 +77,9 @@ function dae(dz, z, p, t)
     phicat_sign =sign.(phicat)
     phian_sign=sign.(phian)
 
-    phi=abs.(phi)
-    phicat=abs.(phicat)
-    phian=abs.(phian)
+    # phi=abs.(phi)
+    # phicat=abs.(phicat)
+    # phian=abs.(phian)
 
     dz=reshape(dz, (nx,ny, 5))
     
@@ -99,9 +99,9 @@ function dae(dz, z, p, t)
     psi_flux_y=similar(psi)
 
     mu=similar(phi)
-    # mu=(1/N).*log.(abs.(phi)./abs.(1 .-phi).^N).-2*chi*abs.(phi).+ psi.+sigma*u
+    mu=(1/N).*log.(abs.(phi)./abs.(1 .-phi).^N.+1e-12).-2*chi*(abs.(phi).+1e-12).+ psi.+sigma*u
 
-    mu=-log.(abs.(1 .-phi)).-2*chi*abs.(phi).+ psi.+sigma*u
+    # mu=-log.(abs.(1 .-phi)).-2*chi*abs.(phi).+ psi.+sigma*u
 
 
 
@@ -111,8 +111,11 @@ function dae(dz, z, p, t)
         jp1 = (j == ny) ? 1 : j + 1  # Periodic boundary condition
         jm1 = (j == 1) ? ny : j - 1  # Periodic boundary condition
 
-        phi_flux_x[i,j] = -(1/N)*(phi[ip1, j] - phi[i, j])/dx-(phi[ip1,j]+phi[i,j])/2 * (mu[ip1, j] - mu[i, j])/dx
-        phi_flux_y[i,j] = -(1/N)*(phi[i, jp1] - phi[i, j])/dy-(phi[i,jp1]+phi[i,j])/2 * (mu[i, jp1] - mu[i, j])/dy 
+        # phi_flux_x[i,j] = -(1/N)*(phi[ip1, j] - phi[i, j])/dx-(phi[ip1,j]+phi[i,j])/2 * (mu[ip1, j] - mu[i, j])/dx
+        # phi_flux_y[i,j] = -(1/N)*(phi[i, jp1] - phi[i, j])/dy-(phi[i,jp1]+phi[i,j])/2 * (mu[i, jp1] - mu[i, j])/dy 
+
+        phi_flux_x[i,j] =-(phi[ip1,j]+phi[i,j])/2 * (mu[ip1, j] - mu[i, j])/dx
+        phi_flux_y[i,j] =-(phi[i,jp1]+phi[i,j])/2 * (mu[i, jp1] - mu[i, j])/dy 
 
         phicat_flux_x[i,j] = -D*(phicat[ip1, j] - phicat[i, j])/dx-D*(phicat[ip1,j]+phicat[i,j])/2 * (u[ip1, j] - u[i, j])/dx
         phicat_flux_y[i,j] = -D*(phicat[i, jp1] - phicat[i, j])/dy-D*(phicat[i,jp1]+phicat[i,j])/2 * (u[i, jp1] - u[i, j])/dy
@@ -140,9 +143,15 @@ function dae(dz, z, p, t)
         psires=-(psi_flux_x[i,j]-psi_flux_x[im1,j])/dx-(psi_flux_y[i,j]-psi_flux_y[i,jm1])/dy+psi[i,j]
 
         
-        dz[i, j, 1] =  dphi*phi_sign[i,j]
-        dz[i, j, 2] = dphicat*phicat_sign[i,j]
-        dz[i, j, 3] =  dphian*phian_sign[i,j]
+        # dz[i, j, 1] =  dphi*phi_sign[i,j]
+        # dz[i, j, 2] = dphicat*phicat_sign[i,j]
+        # dz[i, j, 3] =  dphian*phian_sign[i,j]
+        # dz[i, j, 4]= ures
+        # dz[i, j, 5]= psires
+
+        dz[i, j, 1] =  dphi
+        dz[i, j, 2] = dphicat
+        dz[i, j, 3] =  dphian
         dz[i, j, 4]= ures
         dz[i, j, 5]= psires
 
@@ -171,20 +180,34 @@ function run_simulation(p)
  
         dz0=0*z0
         jac_sparsity = Symbolics.jacobian_sparsity((dz, z) -> dae(dz, z, p, 0.0), dz0, z0)
-        
-        
-
-        
-        
-       
 
         f = ODEFunction(dae, mass_matrix=M, jac_prototype=float.(jac_sparsity))
         # f = ODEFunction(dae, mass_matrix=M)
         prob = ODEProblem(f, z0, tspan,p)
-        sol = solve(prob,Rosenbrock23(autodiff=false),reltol=1e-6,abstol=1e-6, progress = true)
+
+        # Create the callback
+        cb = ContinuousCallback(condition, affect!)
+
+        sol = solve(prob,Rosenbrock23(autodiff=false), progress = true, callback=cb)
     end
     return x_centers, y_centers, sol
 end
+
+# Define the condition to check if variables are non-positive
+function condition(z, t, integrator)
+    p=integrator.p
+    L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
+    phi=z[1:Int(nx*ny)]
+    return minimum(phi)
+end
+
+# Define the affect function to enforce positivity
+function affect!(integrator)
+    p=integrator.p
+    L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
+    integrator.u[1:Int(nx*ny)] .= max.(integrator.u[1:Int(nx*ny)], 0.0)
+end
+
 
 # Define a wrapper function to use with ForwardDiff
 function dae_wrapper(z::AbstractVector, p, t)
@@ -259,22 +282,22 @@ function find_R(phi)
 end
 
 # Example usage
-nx::Int = 20  # Number of spatial grid points in x-direction
+nx::Int = 40  # Number of spatial grid points in x-direction
 ny::Int = nx # Number of spatial grid points in y-direction
-L=20
+L=40
 
-N=100
+N=50
 
 dx = L/ nx
 dy = L / ny
 
 D=sqrt(N)
 lambda=0.6
-sigma=0.01
+sigma=0.0
 chi=(1+1/sqrt(N))^2/1.2
 chi=1
 phi0=1/(1+sqrt(N))
-phi0=0.1
+phi0=0.05
 phis0=0.002
 phis0=0.01
 phicat0=phis0
