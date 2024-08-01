@@ -231,7 +231,7 @@ function affect!(integrator)
     integrator.u[1:Int(nx*ny)] .= max.(integrator.u[1:Int(nx*ny)], 0.0)
 end
 
-function plot_solution(x_centers, y_centers, z, title_str, color, zlims, p)
+function plot_solution(x_centers, y_centers, z, title_str, zlims, p)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
     nx=convert(Int,nx)
     ny=convert(Int, ny)
@@ -328,9 +328,8 @@ Rt=similar(interpolation_times)
 anim = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     phi_values = reshape(interpolated_solution[1:nx*ny],(nx,ny))
-    color = :viridis
     zlims = (0, 1)
-    plot_solution(x_centers, y_centers, phi_values,string(interpolation_times[j]), color, zlims, p)
+    plot_solution(x_centers, y_centers, phi_values,string(interpolation_times[j]), zlims, p)
     Rt[j]=find_R(phi_values)
 end 
 gif(anim, "animation.gif", fps=4)
@@ -351,7 +350,6 @@ writedlm("Rdata.csv", Rt, ',')
 anim2 = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     u_values = reshape(interpolated_solution[3*nx*ny+1:4*nx*ny],(nx,ny))
-    color = :redsandblues
     zlims = (-1, 1)
     plot_solution(x_centers, y_centers, u_values,string(interpolation_times[j]),p, (-1, 1))
 end 
@@ -360,7 +358,6 @@ gif(anim2, "potential.gif", fps=4)
 anim3 = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     salt_values = reshape(interpolated_solution[nx*ny+1:2*nx*ny],(nx,ny)).+reshape(interpolated_solution[2*nx*ny+1:3*nx*ny],(nx,ny))
-    color = :viridis
     zlims = (0, 0.1)
     plot_solution(x_centers, y_centers, salt_values,string(interpolation_times[j]),p, (0, 0.1))
 end 
