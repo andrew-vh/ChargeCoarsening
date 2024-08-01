@@ -1,3 +1,7 @@
+using Pkg
+Pkg.activate("/home/av8650/.julia/project1")
+Pkg.instantiate()
+
 using DifferentialEquations, Random, Statistics
 using Plots
 using LinearAlgebra
@@ -130,6 +134,141 @@ function dae(dz, z, p, t)
     u=reshape(z[3*nx*ny+1:4*nx*ny], (nx,ny))
     psi=reshape(z[4*nx*ny+1:5*nx*ny], (nx,ny))
 
+    phi_sign =sign.(phi)
+    phicat_sign =sign.(phicat)
+    phian_sign=sign.(phian)
+
+    phi=abs.(phi)
+    phicat=abs.(phicat)
+    phian=abs.(phian)
+
+    dz=reshape(dz, (nx,ny, 5))
+    
+    phi_flux_x=similar(phi)
+    phi_flux_y=similar(phi)
+
+    phicat_flux_x=similar(phicat)
+    phicat_flux_y=similar(phicat)
+
+    phian_flux_x=similar(phian)
+    phian_flux_y=similar(phian)
+
+    u_flux_x=similar(u)
+    u_flux_y=similar(u)
+
+    psi_flux_x=similar(psi)
+    psi_flux_y=similar(psi)
+
+    mu=similar(phi)
+    #mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi.+sigma*u
+    mu=log.(abs.(1 .-phi)).-2*chi*phi.+ psi.+sigma*u
+
+
+    for i in 1:nx, j in 1:ny
+        ip1 = (i == nx) ? 1 : i + 1  # Periodic boundary condition
+        im1 = (i == 1) ? nx : i - 1  # Periodic boundary condition
+        jp1 = (j == ny) ? 1 : j + 1  # Periodic boundary condition
+        jm1 = (j == 1) ? ny : j - 1  # Periodic boundary condition
+
+        phi_flux_x[i,j] = -(1/N)*(phi[ip1, j] - phi[i, j])/dx - (phi[ip1,j]+phi[i,j])/2 * (mu[ip1, j] - mu[i, j])/dx
+        phi_flux_y[i,j] = -(1/N)*(phi[i, jp1] - phi[i, j])/dy - (phi[i,jp1]+phi[i,j])/2 * (mu[i, jp1] - mu[i, j])/dy 
+
+        phicat_flux_x[i,j] = -D*(phicat[ip1, j] - phicat[i, j])/dx-D*(phicat[ip1,j]+phicat[i,j])/2 * (u[ip1, j] - u[i, j])/dx
+        phicat_flux_y[i,j] = -D*(phicat[i, jp1] - phicat[i, j])/dy-D*(phicat[i,jp1]+phicat[i,j])/2 * (u[i, jp1] - u[i, j])/dy
+
+        phian_flux_x[i,j] = -D*(phian[ip1, j] - phian[i, j])/dx+D*(phian[ip1,j]+phian[i,j])/2 * (u[ip1, j] - u[i, j])/dx
+        phian_flux_y[i,j] = -D*(phian[i, jp1] - phian[i, j])/dy+D*(phian[i,jp1]+phian[i,j])/2 * (u[i, jp1] - u[i, j])/dy
+
+        u_flux_x[i,j]=-lambda^2*(u[ip1, j] - u[i, j])/dx
+        u_flux_y[i,j]=-lambda^2*(u[i, jp1] - u[i, j])/dy
+
+        psi_flux_x[i,j]=-(phi[ip1, j] - phi[i, j])/dx
+        psi_flux_y[i,j]=-(phi[i, jp1] - phi[i, j])/dy
+    end
+
+    for i in 1:nx, j in 1:ny
+        ip1 = (i == nx) ? 1 : i + 1  # Periodic boundary condition
+        im1 = (i == 1) ? nx : i - 1  # Periodic boundary condition
+        jp1 = (j == ny) ? 1 : j + 1  # Periodic boundary condition
+        jm1 = (j == 1) ? ny : j - 1  # Periodic boundary condition
+
+        dz[i, j, 1] = (-(phi_flux_x[i,j]-phi_flux_x[im1,j])/dx - (phi_flux_y[i,j]-phi_flux_y[i,jm1])/dy) * phi_sign[i,j]
+        dz[i, j, 2] = (-(phicat_flux_x[i,j]-phicat_flux_x[im1,j])/dx - (phicat_flux_y[i,j]-phicat_flux_y[i,jm1])/dy) * phicat_sign[i,j]
+        dz[i, j, 3] = (-(phian_flux_x[i,j]-phian_flux_x[im1,j])/dx - (phian_flux_y[i,j]-phian_flux_y[i,jm1])/dy) * phian_sign[i,j]
+        dz[i, j, 4] = -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+(phicat[i,j]-phian[i,j]+sigma*phi[i,j])
+        dz[i, j, 5] = -(psi_flux_x[i,j]-psi_flux_x[im1,j])/dx-(psi_flux_y[i,j]-psi_flux_y[i,jm1])/dy+psi[i,j]
+
+        if i==1 && j==1
+            dz[i, j, 4]= u[i,j]
+        end
+    end
+    dz =reshape(dz, (5*nx*ny,1))
+end
+
+function dae2(dz, z, p, t)
+    println(t)
+    L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal = p
+    nx=convert(Int, nx)
+    ny=convert(Int, ny)
+
+    dz[1:3*nx*ny] = sign.(z[1:3*nx*ny])
+
+    Jx = similar(z)
+    Jy = similar(z)
+
+    for i in 1:nx, j in 1:ny
+        ip1 = (i == nx) ? 1 : i + 1
+        jp1 = (j == ny) ? 1 : j + 1
+
+        k = nx*(j-1)+i
+        kx = nx*(j-1)+ip1
+        ky = nx*(jp1-1)+i
+
+        Jx[k] = -(1/N)*(z[kx] - z[k])/dx - (z[kx]+z[k])/2 * ((1/(1-z[k])-2*chi)*(z[kx] - z[k])/dx + (z[4*nx*ny+kx] - z[4*nx*ny+k])/dx + sigma * (z[3*nx*ny+kx] - z[3*nx*ny+k])/dx)
+        Jy[k] = -(1/N)*(z[ky] - z[k])/dy - (z[ky]+z[k])/2 * ((1/(1-z[k])-2*chi)*(z[ky] - z[k])/dy + (z[4*nx*ny+ky] - z[4*nx*ny+k])/dy + sigma * (z[3*nx*ny+ky] - z[3*nx*ny+k])/dy)
+        Jx[nx*ny+k] = -D*(z[nx*ny+kx] - z[nx*ny+k])/dx-D*(z[nx*ny+kx]+z[nx*ny+k])/2 * (z[3*nx*ny+kx] - z[3*nx*ny+k])/dx
+        Jy[nx*ny+k] = -D*(z[nx*ny+ky] - z[nx*ny+k])/dy-D*(z[nx*ny+ky]+z[nx*ny+k])/2 * (z[3*nx*ny+ky] - z[3*nx*ny+k])/dy
+        Jx[2*nx*ny+k] = -D*(z[2*nx*ny+kx] - z[2*nx*ny+k])/dx+D*(z[2*nx*ny+kx]+z[2*nx*ny+k])/2 * (z[3*nx*ny+kx] - z[3*nx*ny+k])/dx
+        Jy[2*nx*ny+k] = -D*(z[2*nx*ny+ky] - z[2*nx*ny+k])/dy+D*(z[2*nx*ny+ky]+z[2*nx*ny+k])/2 * (z[3*nx*ny+ky] - z[3*nx*ny+k])/dy
+        Jx[3*nx*ny+k] = -lambda^2*(z[3*nx*ny+kx] - z[3*nx*ny])/dx
+        Jy[3*nx*ny+k] = -lambda^2*(z[3*nx*ny+ky] - z[3*nx*ny])/dy
+        Jx[4*nx*ny+k] = -(z[kx] - z[k])/dx
+        Jy[4*nx*ny+k] = -(z[ky] - z[k])/dy
+    end
+
+    for i in 1:nx, j in 1:ny
+        im1 = (i == 1) ? nx : i - 1
+        jm1 = (j == 1) ? ny : j - 1
+
+        k = nx*(j-1)+i
+        kx = nx*(j-1)+im1
+        ky = nx*(jm1-1)+i
+
+        dz[k] = dz[k] * (-(Jx[k] - Jx[kx])/dx - (Jy[k] - Jy[ky])/dy)
+        dz[nx*ny+k] = dz[nx*ny+k] * (-(Jx[nx*ny+k] - Jx[nx*ny+kx])/dx - (Jy[nx*ny+k] - Jy[nx*ny+ky])/dy)
+        dz[2*nx*ny+k] = dz[2*nx*ny+k] * (-(Jx[2*nx*ny+k] - Jx[2*nx*ny+kx])/dx - (Jy[2*nx*ny+k] - Jy[2*nx*ny+ky])/dy)
+        dz[3*nx*ny+k] = (-(Jx[3*nx*ny+k] - Jx[3*nx*ny+kx])/dx - (Jy[3*nx*ny+k] - Jy[3*nx*ny+ky])/dy)+(sigma*z[k] + z[nx*ny+k] - z[2*nx*ny])
+        dz[4*nx*ny+k] = (-(Jx[4*nx*ny+k] - Jx[4*nx*ny+kx])/dx - (Jy[4*nx*ny+k] - Jy[4*nx*ny+ky])/dy)+z[4*nx*ny+k]
+
+        if i==1 && j==1
+            dz[3*nx*ny+1]= z[3*nx*ny+1]
+        end
+    end
+end
+
+function dae3(dz, z, p, t)
+    println(t)
+    L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal= p
+    nx=convert(Int,nx)
+    ny=convert(Int, ny)
+    
+    # converts z vector into matrices for 5 variables
+    phi=reshape(z[1:nx*ny], (nx,ny))
+    phicat=reshape(z[nx*ny+1:2*nx*ny], (nx,ny))
+    phian=reshape(z[2*nx*ny+1:3*nx*ny], (nx,ny))
+    u=reshape(z[3*nx*ny+1:4*nx*ny], (nx,ny))
+    psi=reshape(z[4*nx*ny+1:5*nx*ny], (nx,ny))
+
     dz=reshape(dz, (nx,ny, 5))
     
     phi_flux_x=similar(phi)
@@ -149,6 +288,9 @@ function dae(dz, z, p, t)
 
     mu=similar(phi)
     mu=log.(abs.(phi).^(1/N)./abs.(1 .-phi) .+1e-6).-2*chi*phi.+ psi.+sigma*u
+
+
+
 
     for i in 1:nx, j in 1:ny
         ip1 = (i == nx) ? 1 : i + 1  # Periodic boundary condition
@@ -180,6 +322,9 @@ function dae(dz, z, p, t)
         dz[i, j, 1] =  -(phi_flux_x[i,j]-phi_flux_x[im1,j])/dx - (phi_flux_y[i,j]-phi_flux_y[i,jm1])/dy
         dz[i, j, 2] =  -(phicat_flux_x[i,j]-phicat_flux_x[im1,j])/dx - (phicat_flux_y[i,j]-phicat_flux_y[i,jm1])/dy
         dz[i, j, 3] =  -(phian_flux_x[i,j]-phian_flux_x[im1,j])/dx - (phian_flux_y[i,j]-phian_flux_y[i,jm1])/dy
+        # dz[i, j, 1] =  maximum(-(phi_flux_x[i,j]-phi_flux_x[im1,j])/dx - (phi_flux_y[i,j]-phi_flux_y[i,jm1])/dy, -9000*phi[i, j])
+        # dz[i, j, 2] =  maximum(-(phicat_flux_x[i,j]-phicat_flux_x[im1,j])/dx - (phicat_flux_y[i,j]-phicat_flux_y[i,jm1])/dy, -9000*phicat[i, j])
+        # dz[i, j, 3] =  maximum(-(phian_flux_x[i,j]-phian_flux_x[im1,j])/dx - (phian_flux_y[i,j]-phian_flux_y[i,jm1])/dy, -9000*phian[i, j])
         # dz[i, j, 4]= -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+sign((phicat[i,j]-phian[i,j]+sigma*phi[i,j]))*maximum((abs(phicat[i,j]-phian[i,j]+sigma*phi[i,j]), 1e-8))
         dz[i, j, 4]= -(u_flux_x[i,j]-u_flux_x[im1,j])/dx-(u_flux_y[i,j]-u_flux_y[i,jm1])/dy+sign((phicat[i,j]-phian[i,j]+sigma*phi[i,j]))*maximum((abs(phicat[i,j]-phian[i,j]+sigma*phi[i,j])))
         dz[i, j, 5]= -(psi_flux_x[i,j]-psi_flux_x[im1,j])/dx-(psi_flux_y[i,j]-psi_flux_y[i,jm1])/dy+psi[i,j]
@@ -202,41 +347,30 @@ function run_simulation(p)
         M=I(5*nx*ny)
         M[3*nx*ny+1:end,3*nx*ny+1:end]=zeros((2*nx*ny, 2*nx*ny))
         
-        sparse_bool=true
-        
-        if sparse_bool
-            dz0=z0*0.0
-            jac_sparsity = Symbolics.jacobian_sparsity((dz, z) -> dae(dz, z, p, 0.0), dz0, z0)
-            f = ODEFunction(dae, mass_matrix=M, jac_prototype=float.(jac_sparsity))
-        else
-            f = ODEFunction(dae, mass_matrix=M)
-        end
+        dz0=z0*0.0
+        jac_sparsity = Symbolics.jacobian_sparsity((dz, z) -> dae3(dz, z, p, 0.0), dz0, z0)
+        f = ODEFunction(dae3, mass_matrix=M, jac_prototype=float.(jac_sparsity))
+       
         prob = ODEProblem(f, z0, tspan,p)
-        cb = ContinuousCallback(condition, affect!)
-        sol = solve(prob,Rosenbrock23(autodiff=false), progress = true, callback=cb)
+        #sol = solve(prob,Rosenbrock23(autodiff=false), reltol=1e-6,abstol=1e-6)
+        sol = solve(prob, Rosenbrock23(autodiff=false), adaptive = false, dt=1e-4)
     end
     return x_centers, y_centers, sol
 end
 
-function condition(z, t, integrator)
-    p=integrator.p
-    L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
-    phi=z[1:Int(nx*ny)]
-    return minimum(phi)
-end
+# function poscallback(u, t, integrator)
+#     u .= max.(u, 0)
+# end
 
-function affect!(integrator)
-    p=integrator.p
-    L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
-    integrator.u[1:Int(nx*ny)] .= max.(integrator.u[1:Int(nx*ny)], 0.0)
-end
+# condition(u, t, integrator) = any(x -> x < 0, u)
+# cb = DiscreteCallback(condition, poscallback)
 
-function plot_solution(x_centers, y_centers, z, title_str, color, zlims, p)
+function plot_solution(x_centers, y_centers, z, title_str, p, zlimits, color)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
     nx=convert(Int,nx)
     ny=convert(Int, ny)
     # surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, zlims=(0, 1), clim=(0, 1))
-    surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, clim=(0, 1), zlims=(0,1))
+    surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=color, clim=zlimits, zlims=zlimits)
 end
 
 function compute_structure_factor(field::Matrix{Float64})
@@ -295,32 +429,31 @@ end
 
 
 # Example usage
-nx::Int = 20  # Number of spatial grid points in x-direction
-ny::Int = 20 # Number of spatial grid points in y-direction
-L=20
+const nx::Int = 150  # Number of spatial grid points in x-direction
+const ny::Int = 150 # Number of spatial grid points in y-direction
+const L=100
 
+const N=10
 
-N=100
+const dx = L/ nx
+const dy = L / ny
 
-dx = L/ nx
-dy = L / ny
+const D=sqrt(N)
+const lambda=0.6
+const sigma=0.1
+const chi=(1+1/sqrt(N))^2/1.2
+const phi0=1/(1+sqrt(N))
+const phicat0=0.002
+const phian0=phicat0+sigma*phi0
+const tfinal=1000
+const dt=tfinal/100
 
-D=sqrt(N)
-lambda=0.6
-sigma=0.1
-chi=1.2
-phi0=0.1
-phicat0=0.001
-phian0=phicat0+sigma*phi0
-tfinal=100
-dt=tfinal/100
-
-p=[L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal]
+const p=[L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal]
 
 x_centers, y_centers, sol = run_simulation(p)
 
-mkdir("test3")
-cd("test3")
+mkdir("output1")
+cd("output1")
 
 # Time points where you want to interpolate
 interpolation_times = 0:dt:tfinal
@@ -328,10 +461,8 @@ Rt=similar(interpolation_times)
 anim = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     phi_values = reshape(interpolated_solution[1:nx*ny],(nx,ny))
-    color = :viridis
-    zlims = (0, 1)
-    plot_solution(x_centers, y_centers, phi_values,string(interpolation_times[j]), color, zlims, p)
-    Rt[j]=find_R(phi_values)
+    plot_solution(x_centers, y_centers, phi_values,string(interpolation_times[j]), p, (0, 1), :viridis)
+    Rt[j]=find_R(z_vals)
 end 
 gif(anim, "animation.gif", fps=4)
 
@@ -351,17 +482,13 @@ writedlm("Rdata.csv", Rt, ',')
 anim2 = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     u_values = reshape(interpolated_solution[3*nx*ny+1:4*nx*ny],(nx,ny))
-    color = :redsandblues
-    zlims = (-1, 1)
-    plot_solution(x_centers, y_centers, u_values,string(interpolation_times[j]),p, (-1, 1))
-end 
+    plot_solution(x_centers, y_centers, u_values, string(interpolation_times[j]), p, (-1, 1), :redsblues)
+end
 gif(anim2, "potential.gif", fps=4)
 
 anim3 = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     salt_values = reshape(interpolated_solution[nx*ny+1:2*nx*ny],(nx,ny)).+reshape(interpolated_solution[2*nx*ny+1:3*nx*ny],(nx,ny))
-    color = :viridis
-    zlims = (0, 0.1)
-    plot_solution(x_centers, y_centers, salt_values,string(interpolation_times[j]),p, (0, 0.1))
-end 
-gif(anim3, "salt.gif", fps=4)
+    plot_solution(x_centers, y_centers, salt_values, string(interpolation_times[j]), p, (0, 0.1), :viridis)
+end
+gif(anim2, "salt.gif", fps=4)

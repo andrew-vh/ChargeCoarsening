@@ -5,8 +5,8 @@ from scipy.special import genlaguerre
 # Parameters
 num_terms = 100
 laguerre_polynomials = [genlaguerre(n, 1) for n in range(num_terms)]
-N1 = 50
-y1_values = 1-np.logspace(-10, np.log10(0.999), 200)
+N1 = 10
+y1_values = 1-np.logspace(-10, np.log10(0.9), 200)
 tanhy1w2_values = np.sort(np.concatenate([np.logspace(-8, -0.0001, 200),-np.logspace(-8, -0.0001, 200)]))
 alpha_crit = 3
 
@@ -97,15 +97,40 @@ y1, tanhy1w2, y2, w2, y3, w3, z, phi1A, phi1B, phi2A, phi2B, phi3A, phi3B, alpha
 def plot1(y1, tanhy1w2, alpha, alpha_crit):
     plt.figure(figsize=(8,6))
     plt.contourf(y1, tanhy1w2, alpha, cmap='viridis', levels=100)
-    highlight = plt.contour(y1, tanhy1w2, alpha, levels=[0.99*alpha_crit, alpha_crit, 1.01*alpha_crit], colors='red', linewidths=0.5)
-    plt.colorbar(label='alpha')
+    highlight = plt.contour(y1, tanhy1w2, alpha, levels=[alpha_crit], colors='red', linewidths=1)
     plt.xlim(0, 1)
     plt.ylim(0, 1)
     plt.title('Phase diagram')
     plt.show()
+    return highlight
+
+highlight = plot1(y1, tanhy1w2, alpha, alpha_crit)
+
+def plot2(highlight, N1, num_terms):
+    contour = highlight.collections[0]
+    path = contour.get_paths()[0]
+    vertices = path.vertices
+    y1_values = vertices[:, 0]
+    tanhy1w2_values = vertices[:, 1]
+    y1crit, tanhy1w2crit, y2crit, w2crit, y3crit, w3crit, zcrit, phi1Acrit, phi1Bcrit, phi2Acrit, phi2Bcrit, phi3Acrit, phi3Bcrit, alphacrit = master(N1, y1_values, tanhy1w2_values, num_terms)
+    print(phi1Acrit)
+
+    plt.figure(figsize=(8,6))
+    plt.plot(phi1Acrit, phi2Acrit, color='red')
+    print("hello")
+    #plt.plot(phi1Bcrit, phi2Bcrit)
+    #for i in range(len(phi1Acrit)):
+        #plt.plot([phi1Acrit[i], phi1Bcrit[i]], [phi2Acrit[i], phi2Bcrit[i]], linestyle='--', linewidth=0.1)
+    plt.xlim(0, 0.5)
+    plt.ylim(0, 0.5)
+    #plt.xscale('log')
+    plt.title('Phase diagram')
+    plt.xlabel('phi1')
+    plt.ylabel('phi_salt')
+    plt.show()
     return
 
-plot1(y1, tanhy1w2, alpha, alpha_crit)
+plot2(highlight, N1, num_terms)
 
 # Selects variables that give the critical alpha
 def selectcrit(y1, tanhy1w2, y2, w2, y3, w3, z, phi1A, phi1B, phi2A, phi2B, phi3A, phi3B, alpha, alpha_crit):
