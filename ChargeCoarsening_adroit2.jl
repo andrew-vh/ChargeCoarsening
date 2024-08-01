@@ -365,12 +365,12 @@ end
 # condition(u, t, integrator) = any(x -> x < 0, u)
 # cb = DiscreteCallback(condition, poscallback)
 
-function plot_solution(x_centers, y_centers, z, title_str, p, zlimits, color)
+function plot_solution(x_centers, y_centers, z, title_str, p, zlimits)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
     nx=convert(Int,nx)
     ny=convert(Int, ny)
     # surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, zlims=(0, 1), clim=(0, 1))
-    surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=color, clim=zlimits, zlims=zlimits)
+    surface(x_centers, y_centers, z, xlabel="x", ylabel="y", zlabel="u", title=title_str,  camera=(0, 90), c=:viridis, clim=zlimits, zlims=zlimits)
 end
 
 function compute_structure_factor(field::Matrix{Float64})
@@ -461,7 +461,7 @@ Rt=similar(interpolation_times)
 anim = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     phi_values = reshape(interpolated_solution[1:nx*ny],(nx,ny))
-    plot_solution(x_centers, y_centers, phi_values,string(interpolation_times[j]), p, (0, 1), :viridis)
+    plot_solution(x_centers, y_centers, phi_values,string(interpolation_times[j]), p, (0, 1))
     Rt[j]=find_R(z_vals)
 end 
 gif(anim, "animation.gif", fps=4)
@@ -482,13 +482,13 @@ writedlm("Rdata.csv", Rt, ',')
 anim2 = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     u_values = reshape(interpolated_solution[3*nx*ny+1:4*nx*ny],(nx,ny))
-    plot_solution(x_centers, y_centers, u_values, string(interpolation_times[j]), p, (-1, 1), :redsblues)
+    plot_solution(x_centers, y_centers, u_values, string(interpolation_times[j]), p, (-1, 1))
 end
 gif(anim2, "potential.gif", fps=4)
 
 anim3 = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
     salt_values = reshape(interpolated_solution[nx*ny+1:2*nx*ny],(nx,ny)).+reshape(interpolated_solution[2*nx*ny+1:3*nx*ny],(nx,ny))
-    plot_solution(x_centers, y_centers, salt_values, string(interpolation_times[j]), p, (0, 0.1), :viridis)
+    plot_solution(x_centers, y_centers, salt_values, string(interpolation_times[j]), p, (0, 0.1))
 end
 gif(anim2, "salt.gif", fps=4)
