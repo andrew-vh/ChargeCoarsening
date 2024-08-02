@@ -6,8 +6,8 @@ from scipy.special import genlaguerre
 num_terms = 100
 laguerre_polynomials = [genlaguerre(n, 1) for n in range(num_terms)]
 N = 1000
-y = 1-np.logspace(-10, np.log10(0.999), 200)
-sigma = 0.2
+y = 1-np.logspace(-5, np.log10(0.999), 200)
+sigma = 0.1
 
 # Calculates z given A and B
 def hvoinv(A,B, laguerre_polynomials, num_terms=100):
@@ -79,7 +79,7 @@ def plot1(phiA, phiB, alpha):
     plt.plot(phiA, alpha)
     plt.plot(phiB, alpha)
     index = np.argmin(phiA)
-    plt.scatter([phiA[index]], [alpha[index]])
+    plt.scatter([phiA[index]], [alpha[index]], color='black')
     plt.xlim(0, 1)
     plt.ylim(0, 20)
     plt.title('Phase diagram')
@@ -164,20 +164,34 @@ def check(N, sigma, phiA, phiB, alpha):
     piB = (1/N - 1)*phiB - np.log(1-(1+sigma)*phiB) - np.sqrt(2)*alpha*np.power(sigma*phiB, 1.5)
 
     plt.figure(figsize=(8,6))
-    plt.plot(muA, muA, color='red')
-    plt.scatter(muA, muB)
+    plt.scatter(muA, muA-muB)
     plt.xlabel('muA')
-    plt.ylabel('muB')
+    plt.ylabel('mudiff')
     plt.title('mu')
     plt.show()
 
     plt.figure(figsize=(8,6))
-    plt.plot(piA, piA, color='red')
-    plt.scatter(piA, piB)
+    plt.scatter(piA, piA-piB)
     plt.xlabel('PiA')
-    plt.ylabel('PiB')
+    plt.ylabel('Pidiff')
     plt.title('Pi')
     plt.show()
     return
 
 check(N, sigma, phiA, phiB, alpha)
+
+def discriminant(phi, alpha, N, sigma):
+    return (1/(N*phi) + 1/(1-(1+sigma)*phi) - 3/4*alpha*np.power(sigma, 2)*np.power(2*sigma*phi, -0.5)) * (1/(sigma*phi) + 1/(1-(1+sigma)*phi) - 3/4*alpha*np.power(2*sigma*phi, -0.5)) - np.power(1/(1-(1+sigma)*phi) - 3/4*alpha*sigma*np.power(2*sigma*phi, -0.5), 2)
+    
+def spinodal(N, sigma):
+    x = np.linspace(1e-10, 0.5, 1000)
+    y = np.linspace(1e-10, 20, 1000)
+    X, Y = np.meshgrid(x, y)
+    Z = discriminant(X, Y, N, sigma)
+
+    plt.contour(X, Y, Z, levels=[0])
+    plt.xlabel('phi')
+    plt.ylabel('alpha')
+    plt.show()
+
+spinodal(1000, 0.1)
