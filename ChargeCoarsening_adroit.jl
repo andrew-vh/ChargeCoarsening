@@ -17,6 +17,8 @@ using Printf
 using Symbolics
 using CSV
 using DataFrames
+using DelimitedFiles
+using JLD2
 
 ENV["GKSwstype"]="nul"
  
@@ -218,10 +220,17 @@ function run_simulation(p)
             f = ODEFunction(dae, mass_matrix=M)
         end
         prob = ODEProblem(f, z0, tspan,p)
-        sol = solve(prob,Rosenbrock23(autodiff=false),reltol=1e-6,abstol=1e-6)
+        sol = solve(prob,Rosenbrock23(autodiff=false), positive_domain=true, callback=cb, reltol=1e-6,abstol=1e-6)
     end
     return x_centers, y_centers, sol
 end
+
+function poscallback(u, t, integrator)
+    u .= max.(u, 0)
+end
+
+condition(u, t, integrator) = any(x -> x < 0, u)
+cb = DiscreteCallback(condition, poscallback)
 
 function plot_solution(x_centers, y_centers, z, title_str,p)
     L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal=p 
@@ -303,26 +312,24 @@ sigma=0.1
 chi=(1+1/sqrt(N))^2/1.2
 phi0=1/(1+sqrt(N))
 phicat0=0.002
-phian0=0.002+sigma*phi0
-tfinal=10
+phian0=phicat0+sigma*phi0
+tfinal=1000
 dt=tfinal/100
 
 p=[L, dx, dy, nx, ny, chi, sigma, lambda, D, N, phi0, phicat0, phian0, tfinal]
 
 x_centers, y_centers, sol = run_simulation(p)
-t_values = sol.t  # Time values of simulation
 
 mkdir("output1")
 cd("output1")
-CSV.write("simdata.csv", DataFrame(sol), header=false)
 
 # Time points where you want to interpolate
 interpolation_times = 0:dt:tfinal
 Rt=similar(interpolation_times)
 anim = @animate for j=1:length(interpolation_times)
     interpolated_solution=sol(interpolation_times[j])
-    z_vals=reshape(interpolated_solution[1:nx*ny],(nx,ny))
-    plot_solution(x_centers, y_centers, z_vals,string(interpolation_times[j]),p)
+    phi_values = reshape(interpolated_solution[1:nx*ny],(nx,ny))
+    plot_solution(x_centers, y_centers, phi_values,string(interpolation_times[j]),p)
     Rt[j]=find_R(z_vals)
 end 
 gif(anim, "animation.gif", fps=4)
@@ -331,8 +338,11 @@ parameters = "N=$N, σ=$sigma, ϕ0=$phi0, ϕ+=$phicat0, χ=$chi"
 open("parameters.txt", "w") do file
     write(file, parameters)
 end
-CSV.write("Rdata.csv", DataFrame(Rt), header=false)
 
+@save "solution.jld2" sol
 
-# # Create the plot
-# plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", legend=false)
+# Create the plot
+plot(interpolation_times, Rt, xlabel="t", ylabel="R(t)", title="Plot of Rt vs t", legend=false)
+savefig("Rplot.pdf")
+
+writedlm("Rdata.csv", Rt, ',')

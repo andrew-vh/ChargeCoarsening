@@ -218,5 +218,3 @@ def check(N1, phi1A, phi1B, phi2A, phi2B, alpha):
     plt.title('Pi')
     plt.show()
     return
-
-#check(N1, phi1A, phi1B, phi2A, phi2B, alpha)
