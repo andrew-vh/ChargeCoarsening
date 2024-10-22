@@ -6,74 +6,74 @@ from scipy.special import genlaguerre
 num_terms = 100
 laguerre_polynomials = [genlaguerre(n, 1) for n in range(num_terms)]
 N1 = 10
-y1_values = 1-np.logspace(-5, np.log10(0.999), 200)
-tanhy1w2_values = np.sort(np.concatenate([np.logspace(-8, -0.0001, 200),-np.logspace(-8, -0.0001, 200)]))
+y1_values = 1-np.logspace(-20, np.log10(0.9), 400)
+tanhy1w2_values = np.sort(np.concatenate([np.logspace(-15, -0.0001, 400),-np.logspace(-15, -0.0001, 400)]))
 alpha_crit = 3
 
 # Calculates z given A and B
 def hvoinv(A,B, laguerre_polynomials, num_terms=100):
     A = np.asarray(A)
     B = np.asarray(B)
-    c1=1/(A-B)
-    c2=-(A+B)/(A-B)
-    c10=-c1/c2
-    c20=1/c2
-
-    c10=1/(A+B)
-    c20=(B-A)/(A+B)
+    c1=1/(A+B)
+    c2=(B-A)/(A+B)
 
     x=-c1
-    x0=-c10
     for k in range(num_terms):
         L_k_minus_1_1 = laguerre_polynomials[k]  # Use precomputed Laguerre polynomial
         term = -(c2) ** (k+1) * ((c1-c1/c2)* np.exp(-(k+1)*c1) /(k+1)) * L_k_minus_1_1((k+1)*c1-(k+1)*c1/c2)
-        term0 = -(c20) ** (k+1) * ((c10-c10/c20)* np.exp(-(k+1)*c10) /(k+1)) * L_k_minus_1_1((k+1)*c10-(k+1)*c10/c20)
 
         x += term
-        x0 +=term0
-    x=-x0
-    z=A*x/(1-B*x)
+    z=-A*x/(1+B*x)
     z=np.array(z)
-    if z.size>1:
-        cond1 = (abs(z)+abs(B*z/A))<0.5
-        A = np.complex128(A)
-        B = np.complex128(B)
+    #if z.size>1:
+    cond1 = (abs(z)+abs(B*z/A))<0.5
+    A = np.complex128(A)
+    B = np.complex128(B)
 
-        A=A[cond1]
-        B=B[cond1]
-        z[cond1]=(-3 * B + np.sqrt(3) * np.sqrt(2 * A - 4 * A**2 + 3 * B**2)) / (2 * A)
-        z[cond1] = ((-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3) / (6 * 2 ** (1 / 3) * B) -(36 * B ** 2 - 4 * A ** 2) / (3 * 2 ** (2 / 3) * B * (-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3)) -A / (3 * B))
-        z=z.real
-    else:
-        if (abs(z)+abs(B*z/A))<0.5:
-            A=np.complex128(A)
-            B=np.complex128(B)
-            z = ((-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3) / (6 * 2 ** (1 / 3) * B) - (36 * B ** 2 - 4 * A ** 2) / (3 * 2 ** (2 / 3) * B * (-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3)) - A / (3 * B))
-            z=z.real
+    A=A[cond1]
+    B=B[cond1]
+    z[cond1]=(-3 * B + np.sqrt(3) * np.sqrt(2 * A - 4 * A**2 + 3 * B**2)) / (2 * A)
+    z[cond1] = ((-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3) / (6 * 2 ** (1 / 3) * B) -(36 * B ** 2 - 4 * A ** 2) / (3 * 2 ** (2 / 3) * B * (-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3)) -A / (3 * B))
+    z=z.real
+    # else:
+    #     if (abs(z)+abs(B*z/A))<0.5:
+    #         A=np.complex128(A)
+    #         B=np.complex128(B)
+    #         z = ((-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3) / (6 * 2 ** (1 / 3) * B) - (36 * B ** 2 - 4 * A ** 2) / (3 * 2 ** (2 / 3) * B * (-16 * A ** 3 + np.sqrt((-16 * A ** 3 - 432 * A * B ** 2 + 324 * B ** 2) ** 2 + 4 * (36 * B ** 2 - 4 * A ** 2) ** 3) - 432 * A * B ** 2 + 324 * B ** 2) ** (1 / 3)) - A / (3 * B))
+    #         z=z.real
 
     return z
 
 
+def iterate(N1, sigma, y1, tanhy1w2, num_terms, zguess):
+    w2 = np.arctanh(tanhy1w2)/y1
+
+    y2=np.tanh(np.arctanh(y1)/(N1*sigma)+(1-sigma)/sigma*np.arctanh(zguess))
+    y3=(sigma + w2) / (sigma/y1 + w2/y2)
+    w3 = sigma*((1 + y1) * y3) / (y1 * (1 + y3)) + (w2 * (1 + y2) * y3) / (y2 * (1 + y3))
+
+    term65 = w3/y3*(1+1/2*np.sqrt(1-y3**2))
+    term66= (1+y2)/(1-y2)
+    term67= (1+y3)/(1-y3)
+
+    h = (3 * (1 / N1 - 1) - term65 * (np.log(term66) + np.log(term67)))
+
+    A=-((3 * (1 + w2 + w3)) / 2)/h
+    B=((-3 * (1/y1 + w2 / y2 + w3 / y3) /2)+2*term65)/h
+
+    z=abs(hvoinv(A,B, laguerre_polynomials, num_terms))
+    return y1, tanhy1w2, y2, w2, y3, w3, z
+
 # Solves for all variables given a range of y1 and tanh(y1, w2)
 def master(N1, y1_values, tanhy1w2_values, num_terms):
     y1, tanhy1w2 = np.meshgrid(y1_values, tanhy1w2_values)
-    w2 = np.arctanh(tanhy1w2)/y1
+    sigma = 0.5
+    zguess = y1/N1
+    for i in range(20):
+        print(i)
+        y1, tanhy1w2, y2, w2, y3, w3, zguess = iterate(N1, sigma, y1, tanhy1w2, num_terms, zguess)
 
-    y2=np.tanh(np.arctanh(y1)/N1)
-    y3=(1 + w2) / (1/y1 + w2/y2)
-    w3 = ((1 + y1) * y3) / (y1 * (1 + y3)) + (w2 * (1 + y2) * y3) / (y2 * (1 + y3))
-
-    term25 = (1 / y1) + (w2 / y2) + 0.5 * np.sqrt((1 + y1) / y1 + w2 * (1 + y2) / y2) * np.sqrt((1 - y1) / y1 + w2 * (1 - y2) / y2)
-    term26= (1+y2)/(1-y2)
-    term27= ((1 + y1) / y1 + w2 * (1 + y2) / y2) / ((1 - y1) / y1 + w2 * (1 - y2) / y2)
-
-    h = (3 * (1 / N1 - 1) - term25 * (np.log(term26) + np.log(term27)))
-
-    A=-((3 * (1 + w2 + w3)) / 2)/h
-    B=((-3 * (1/y1 + w2 / y2 + w3 / y3) /2)+2*term25)/h
-
-    z=abs(hvoinv(A,B, laguerre_polynomials, num_terms))
-
+    z = zguess
     beta1=2*z/(y1*(1+w2+w3+z/y1+w2*z/y2+w3*z/y3))
     beta2=2*z*w2/(y2*(1+w2+w3+z/y1+w2*z/y2+w3*z/y3))
     beta3=2*z*w3/(y3*(1+w2+w3+z/y1+w2*z/y2+w3*z/y3))
@@ -94,15 +94,39 @@ y1, tanhy1w2, y2, w2, y3, w3, z, phi1A, phi1B, phi2A, phi2B, phi3A, phi3B, alpha
 def plot1(y1, tanhy1w2, alpha, alpha_crit):
     plt.figure(figsize=(8,6))
     plt.contourf(y1, tanhy1w2, alpha, cmap='viridis', levels=100)
-    highlight = plt.contour(y1, tanhy1w2, alpha, levels=[0.99*alpha_crit, alpha_crit, 1.01*alpha_crit], colors='red', linewidths=0.5)
-    plt.colorbar(label='alpha')
+    highlight = plt.contour(y1, tanhy1w2, alpha, levels=[alpha_crit], colors='red', linewidths=0.5)
     plt.xlim(0, 1)
     plt.ylim(0, 1)
     plt.title('Phase diagram')
     plt.show()
+    return highlight
+
+contour = plot1(y1, tanhy1w2, alpha, alpha_crit)
+
+# Convert y1-tanhy1w2 contour into a phi1-phi2 contour
+def phi1phi2(contour):
+    contour_paths = contour.collections[0].get_paths()
+    y1values=[]
+    tanhy1w2values=[]
+    for i, path in enumerate(contour_paths):
+        vertices = path.vertices
+        y1values.append(vertices[:, 0])
+        tanhy1w2values.append(vertices[:, 1])
+    y1, tanhy1w2, y2, w2, y3, w3, z, phi1A, phi1B, phi2A, phi2B, phi3A, phi3B, alpha = master(N1, y1values, tanhy1w2values, num_terms)
+    plt.plot(phi1A, phi2A, color='blue')
+    plt.plot(phi1B, phi2B, color='red')
+    # for i in range(len(phi1A)):
+    #     if (i%100==0):
+    #         plt.plot([phi1A[i], phi1B[i]], [phi2A[i], phi2B[i]], linestyle='--', linewidth=1, color='black')
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    plt.title('Phase diagram')
+    plt.xlabel('phi1')
+    plt.ylabel('phi_salt')
+    plt.show()
     return
 
-plot1(y1, tanhy1w2, alpha, alpha_crit)
+#phi1phi2(contour)
 
 # Selects variables that give the critical alpha
 def selectcrit(y1, tanhy1w2, y2, w2, y3, w3, z, phi1A, phi1B, phi2A, phi2B, phi3A, phi3B, alpha, alpha_crit):
@@ -142,7 +166,7 @@ y1crit, tanhy1w2crit, y2crit, w2crit, y3crit, w3crit, zcrit, phi1Acrit, phi1Bcri
 
 # Plots a phase diagram of phi1 and phi_salt
 def plot2(phi1Acrit, phi1Bcrit, phi2Acrit, phi2Bcrit):
-    np1A = np.asarray(phi1Acrit)
+    np1A = np.asarray(phi1Acrit)    
     np1B = np.asarray(phi1Bcrit)
     np2A = np.asarray(phi2Acrit)
     np2B = np.asarray(phi2Bcrit)
@@ -150,9 +174,9 @@ def plot2(phi1Acrit, phi1Bcrit, phi2Acrit, phi2Bcrit):
     plt.scatter(np1A, np2A)
     plt.scatter(np1B, np2B)
     for i in range(len(np1A)):
-        plt.plot([np1A[i], np1B[i]], [np2A[i], np2B[i]], linestyle='--', linewidth=0.1)
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
+        if (i%100==0):
+            plt.plot([np1A[i], np1B[i]], [np2A[i], np2B[i]], linestyle='--', linewidth=1, color='black')
+    plt.ylim(0, np.max(np2A)*1.1)
     plt.title('Phase diagram')
     plt.xlabel('phi1')
     plt.ylabel('phi_salt')
@@ -195,4 +219,4 @@ def check(N1, phi1A, phi1B, phi2A, phi2B, alpha):
     plt.show()
     return
 
-check(N1, phi1A, phi1B, phi2A, phi2B, alpha)
+#check(N1, phi1A, phi1B, phi2A, phi2B, alpha)
